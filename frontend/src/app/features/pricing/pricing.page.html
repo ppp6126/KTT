@@ -1,0 +1,186 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>ฐานราคากลาง</h1>
+      <p>ราคาวัสดุ ค่าแรง และเครื่องจักร ที่ใช้ถอด BOQ ราคาที่แก้ภายหลังไม่กระทบ BOQ ที่ถอดไปแล้ว</p>
+    </div>
+    @if (type() && canWrite()) {
+      <div class="head-actions">
+        <button *appCan="Perm.PRICING_IMPORT" mat-stroked-button [matMenuTriggerFor]="excel">
+          <mat-icon>table_view</mat-icon> Excel
+        </button>
+        <mat-menu #excel="matMenu">
+          <button mat-menu-item (click)="exportExcel(true)"><mat-icon>download</mat-icon>ดาวน์โหลดแบบฟอร์มเปล่า</button>
+          <button mat-menu-item (click)="exportExcel(false)"><mat-icon>download</mat-icon>ส่งออก{{ typeLabel[type()!] }}ทั้งหมด</button>
+          <button mat-menu-item (click)="file.click()"><mat-icon>upload</mat-icon>นำเข้าจากไฟล์ .xlsx</button>
+        </mat-menu>
+        <input #file type="file" accept=".xlsx" hidden (change)="importExcel(file)" />
+        <button mat-flat-button class="btn-primary" (click)="edit(null)"><mat-icon>add</mat-icon> เพิ่ม{{ typeLabel[type()!] }}</button>
+      </div>
+    }
+  </div>
+
+  @if (importResult(); as r) {
+    @if (!r.saved) {
+      <div class="panel panel-pad import-errors" role="alert">
+        <h2>ยังไม่ได้นำเข้า: พบข้อผิดพลาด {{ r.errors.length }} แถว</h2>
+        <p class="muted">แก้ไฟล์แล้วนำเข้าใหม่ ระบบจะไม่บันทึกจนกว่าทุกแถวจะถูกต้อง</p>
+        <ul>
+          @for (e of r.errors.slice(0, 50); track $index) {
+            <li>แถว {{ e.row }}: {{ e.message }}</li>
+          }
+        </ul>
+        <button mat-button (click)="importResult.set(null)">ปิด</button>
+      </div>
+    }
+  }
+
+  <div class="panel">
+    <mat-tab-group [selectedIndex]="tab()" (selectedIndexChange)="onTab($event)" animationDuration="0ms">
+      <mat-tab label="วัสดุ" />
+      <mat-tab label="ค่าแรง" />
+      <mat-tab label="เครื่องจักร" />
+      <mat-tab label="หมวดวัสดุ" />
+    </mat-tab-group>
+
+    @if (type(); as t) {
+      <div class="filters">
+        <mat-form-field class="search" subscriptSizing="dynamic">
+          <mat-label>ค้นหารหัสหรือชื่อ</mat-label>
+          <mat-icon matPrefix>search</mat-icon>
+          <input matInput [(ngModel)]="q" (ngModelChange)="onSearch()" />
+        </mat-form-field>
+        @if (t === 'materials') {
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>หมวด</mat-label>
+            <mat-select [(ngModel)]="categoryId" (selectionChange)="page = 0; load()">
+              <mat-option value="">ทั้งหมด</mat-option>
+              @for (c of categories(); track c.id) {
+                <mat-option [value]="c.id">{{ c.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+        @if (t === 'labor') {
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>ประเภทช่าง</mat-label>
+            <mat-select [(ngModel)]="trade" (selectionChange)="page = 0; load()">
+              <mat-option value="">ทั้งหมด</mat-option>
+              @for (tr of tradeList; track tr[0]) {
+                <mat-option [value]="tr[0]">{{ tr[1] }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+      </div>
+
+      <div class="table-scroll">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th>รหัส</th>
+              <th>ชื่อ</th>
+              @if (t === 'materials') {
+                <th>หมวด</th>
+              }
+              @if (t === 'labor') {
+                <th>ประเภทช่าง</th>
+              }
+              <th>หน่วย</th>
+              @if (t === 'materials') {
+                @if (canCost()) {
+                  <th class="num">ต้นทุน</th>
+                }
+                <th class="num">ราคาขาย</th>
+                <th>ซัพพลายเออร์</th>
+                <th>อัปเดตราคา</th>
+              } @else if (canCost()) {
+                <th class="num">ราคาต่อหน่วย</th>
+              }
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (t === 'materials') {
+              @for (m of materials(); track m.id) {
+                <tr>
+                  <td class="code">{{ m.code }}</td>
+                  <td>{{ m.name }}</td>
+                  <td>{{ m.categoryName || '–' }}</td>
+                  <td>{{ m.unit }}</td>
+                  @if (canCost()) {
+                    <td class="num">{{ m.costPrice | money }}</td>
+                  }
+                  <td class="num">{{ m.sellPrice | money }}</td>
+                  <td>{{ m.supplierName || '–' }}</td>
+                  <td>{{ m.priceUpdatedAt | thDate }}</td>
+                  <td class="num">
+                    <button mat-icon-button [matMenuTriggerFor]="mm" aria-label="ตัวเลือก"><mat-icon>more_vert</mat-icon></button>
+                    <mat-menu #mm="matMenu">
+                      <button mat-menu-item (click)="history(m)"><mat-icon>history</mat-icon>ประวัติราคา</button>
+                      @if (canWrite()) {
+                        <button mat-menu-item (click)="edit(m)"><mat-icon>edit</mat-icon>แก้ไข</button>
+                        <button mat-menu-item (click)="remove(m)"><mat-icon>delete</mat-icon>ลบ</button>
+                      }
+                    </mat-menu>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="9" class="empty muted">ยังไม่มีข้อมูล เพิ่มทีละรายการหรือนำเข้าจาก Excel</td></tr>
+              }
+            } @else {
+              @for (r of rates(); track r.id) {
+                <tr>
+                  <td class="code">{{ r.code }}</td>
+                  <td>{{ r.name }}</td>
+                  @if (t === 'labor') {
+                    <td>{{ trades[r.trade || 'other'] }}</td>
+                  }
+                  <td>{{ r.unit }}</td>
+                  @if (canCost()) {
+                    <td class="num">{{ r.rate | money }}</td>
+                  }
+                  <td class="num">
+                    @if (canCost()) {
+                      <button mat-icon-button [matMenuTriggerFor]="rm" aria-label="ตัวเลือก"><mat-icon>more_vert</mat-icon></button>
+                      <mat-menu #rm="matMenu">
+                        <button mat-menu-item (click)="history(r)"><mat-icon>history</mat-icon>ประวัติราคา</button>
+                        @if (canWrite()) {
+                          <button mat-menu-item (click)="edit(r)"><mat-icon>edit</mat-icon>แก้ไข</button>
+                          <button mat-menu-item (click)="remove(r)"><mat-icon>delete</mat-icon>ลบ</button>
+                        }
+                      </mat-menu>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="empty muted">ยังไม่มีข้อมูล</td></tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      <mat-paginator [length]="total()" [pageIndex]="page" [pageSize]="size" [pageSizeOptions]="[50, 100, 200]" (page)="onPage($event)" />
+    } @else {
+      <div class="panel-pad">
+        @if (canWrite()) {
+          <button mat-stroked-button (click)="editCategory(null)"><mat-icon>add</mat-icon> เพิ่มหมวด</button>
+        }
+        <ul class="cats">
+          @for (c of categories(); track c.id) {
+            <li>
+              <span class="grow">{{ c.name }}</span>
+              <span class="muted">{{ c.materialCount }} รายการ</span>
+              @if (canWrite()) {
+                <button mat-icon-button (click)="editCategory(c)" aria-label="แก้ไขหมวด"><mat-icon>edit</mat-icon></button>
+                <button mat-icon-button (click)="removeCategory(c)" [disabled]="c.materialCount > 0" aria-label="ลบหมวด"><mat-icon>delete</mat-icon></button>
+              }
+            </li>
+          } @empty {
+            <li class="muted">ยังไม่มีหมวด</li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+</div>

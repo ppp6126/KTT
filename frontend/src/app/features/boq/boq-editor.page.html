@@ -1,0 +1,158 @@
+@if (boq(); as b) {
+  <div class="page wide">
+    <a [routerLink]="['/leads', b.leadId]" class="back"><mat-icon>arrow_back</mat-icon> {{ b.leadTitle }}</a>
+
+    <div class="page-head">
+      <div>
+        <h1>{{ b.name }}</h1>
+        <p>{{ b.customerName }}, แก้ไขล่าสุด {{ b.updatedAt | thDate: true }}</p>
+      </div>
+      <div class="actions">
+        @if (canCost()) {
+          <a mat-stroked-button [routerLink]="['/print/boq', b.id]" target="_blank"><mat-icon>print</mat-icon> ปร.4 / ปร.5</a>
+        }
+        @if (canEdit()) {
+          <button mat-icon-button [matMenuTriggerFor]="more" aria-label="เพิ่มเติม"><mat-icon>more_vert</mat-icon></button>
+          <mat-menu #more="matMenu">
+            <button mat-menu-item (click)="createQuotation('detailed')"><mat-icon>request_quote</mat-icon>ออกใบเสนอราคา (แสดงทุกรายการ)</button>
+            <button mat-menu-item (click)="createQuotation('summary')"><mat-icon>request_quote</mat-icon>ออกใบเสนอราคา (สรุปตามหมวด)</button>
+            <button mat-menu-item (click)="refreshPrices()"><mat-icon>sync</mat-icon>ดึงราคาล่าสุดจากฐานราคา</button>
+            @if (templates().length) {
+              <button mat-menu-item [matMenuTriggerFor]="tpl"><mat-icon>library_add</mat-icon>แทรกจากแม่แบบ</button>
+            }
+            <button mat-menu-item (click)="saveAsTemplate()"><mat-icon>bookmark_add</mat-icon>บันทึกเป็นแม่แบบ</button>
+            <button mat-menu-item (click)="remove()"><mat-icon>delete</mat-icon>ลบ BOQ</button>
+          </mat-menu>
+          <mat-menu #tpl="matMenu">
+            @for (t of templates(); track t.id) {
+              <button mat-menu-item (click)="insertTemplate(t)">{{ t.name }} ({{ t.itemCount }})</button>
+            }
+          </mat-menu>
+          <button mat-flat-button class="btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
+            {{ dirty() ? 'บันทึก' : 'บันทึกแล้ว' }}
+          </button>
+        }
+      </div>
+    </div>
+    @if (saving()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+
+    <div class="layout">
+      <section class="panel tree-panel">
+        <app-boq-tree [(rows)]="rows" [totals]="totals()" [editable]="canEdit()" [showCost]="canCost()" />
+      </section>
+
+      <aside class="side">
+        <section class="panel panel-pad summary">
+          <h2>สรุปราคา</h2>
+          <dl>
+            @if (canCost()) {
+              <div><dt>ต้นทุนรวม</dt><dd class="num">{{ totals().cost | money }}</dd></div>
+              <div><dt>บวกเพิ่ม {{ markup() }}%</dt><dd class="num">{{ totals().sell - totals().cost | money }}</dd></div>
+            }
+            <div><dt>ราคาขาย</dt><dd class="num">{{ totals().sell | money }}</dd></div>
+            @if (totals().discount) {
+              <div><dt>ส่วนลด</dt><dd class="num">-{{ totals().discount | money }}</dd></div>
+            }
+            <div><dt>VAT {{ header()?.vatPct }}%</dt><dd class="num">{{ totals().vat | money }}</dd></div>
+            <div class="grand"><dt>รวมทั้งสิ้น</dt><dd class="num">{{ totals().grand | money }}</dd></div>
+            @if (canCost()) {
+              <div class="margin" [class.low]="totals().margin < 10"><dt>Margin</dt><dd class="num">{{ totals().margin }}%</dd></div>
+            }
+          </dl>
+        </section>
+
+        @if (header(); as h) {
+          @if (canEdit()) {
+            <mat-accordion multi>
+              <mat-expansion-panel [expanded]="true">
+                <mat-expansion-panel-header><mat-panel-title>ค่าดำเนินการและภาษี</mat-panel-title></mat-expansion-panel-header>
+                <div class="fields">
+                  <mat-form-field class="full">
+                    <mat-label>ชื่อ BOQ</mat-label>
+                    <input matInput [ngModel]="h.name" (ngModelChange)="setHeader('name', $event)" />
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>ค่าบริหารจัดการ %</mat-label>
+                    <input matInput type="number" min="0" [ngModel]="h.overheadPct" (ngModelChange)="setHeader('overheadPct', $event)" />
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>กำไร %</mat-label>
+                    <input matInput type="number" min="0" [ngModel]="h.profitPct" (ngModelChange)="setHeader('profitPct', $event)" />
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>สำรองฉุกเฉิน %</mat-label>
+                    <input matInput type="number" min="0" [ngModel]="h.contingencyPct" (ngModelChange)="setHeader('contingencyPct', $event)" />
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>ส่วนลด (บาท)</mat-label>
+                    <input matInput type="number" min="0" [ngModel]="h.discountAmount" (ngModelChange)="setHeader('discountAmount', $event)" />
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>VAT %</mat-label>
+                    <input matInput type="number" min="0" [ngModel]="h.vatPct" (ngModelChange)="setHeader('vatPct', $event)" />
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>หัก ณ ที่จ่าย</mat-label>
+                    <mat-select [ngModel]="h.whtPct" (ngModelChange)="setHeader('whtPct', $event)">
+                      @for (w of [0, 1, 2, 3, 5]; track w) {
+                        <mat-option [value]="w">{{ w }}%</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+              </mat-expansion-panel>
+
+              <mat-expansion-panel>
+                <mat-expansion-panel-header><mat-panel-title>แบบงานราชการ (ปร.4 / ปร.5)</mat-panel-title></mat-expansion-panel-header>
+                <p class="muted small">Factor F ใช้เฉพาะแบบ ปร.5 ไม่รวมในราคาขายและใบเสนอราคา</p>
+                <div class="fields">
+                  <mat-form-field class="full">
+                    <mat-label>Factor F</mat-label>
+                    <mat-select [ngModel]="h.factorFMode" (ngModelChange)="setHeader('factorFMode', $event)">
+                      <mat-option value="none">ไม่ใช้ (F = 1.0000)</mat-option>
+                      <mat-option value="manual">กรอกค่าเอง</mat-option>
+                      <mat-option value="table" [disabled]="!factorTables().length">คำนวณจากตาราง</mat-option>
+                    </mat-select>
+                    @if (!factorTables().length) {
+                      <mat-hint>ยังไม่มีตาราง Factor F เพิ่มได้ที่เมนูตั้งค่า</mat-hint>
+                    }
+                  </mat-form-field>
+                  @if (h.factorFMode === 'manual') {
+                    <mat-form-field class="full">
+                      <mat-label>ค่า Factor F</mat-label>
+                      <input matInput type="number" step="0.0001" min="0.5" max="3" [ngModel]="h.factorFValue" (ngModelChange)="setHeader('factorFValue', $event)" />
+                    </mat-form-field>
+                  }
+                  @if (h.factorFMode === 'table') {
+                    <mat-form-field class="full">
+                      <mat-label>ตาราง Factor F</mat-label>
+                      <mat-select [ngModel]="h.factorFTableId" (ngModelChange)="setHeader('factorFTableId', $event)">
+                        @for (t of factorTables(); track t.id) {
+                          <mat-option [value]="t.id">{{ t.name }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                  }
+                  <mat-form-field class="full">
+                    <mat-label>ชื่อโครงการ</mat-label>
+                    <input matInput [ngModel]="h.projectName" (ngModelChange)="setHeader('projectName', $event)" />
+                  </mat-form-field>
+                  <mat-form-field class="full">
+                    <mat-label>สถานที่ก่อสร้าง</mat-label>
+                    <input matInput [ngModel]="h.projectLocation" (ngModelChange)="setHeader('projectLocation', $event)" />
+                  </mat-form-field>
+                  <mat-form-field class="full">
+                    <mat-label>หน่วยงานเจ้าของโครงการ</mat-label>
+                    <input matInput [ngModel]="h.ownerAgency" (ngModelChange)="setHeader('ownerAgency', $event)" />
+                  </mat-form-field>
+                </div>
+              </mat-expansion-panel>
+            </mat-accordion>
+          }
+        }
+      </aside>
+    </div>
+  </div>
+}

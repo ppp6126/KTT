@@ -15,6 +15,20 @@ export function thDate(value: string | Date | null | undefined): string {
   return DATE.format(new Date(value));
 }
 
+/** แบบสั้นตามเอกสารเดิมของบริษัท เช่น 29/7/69 (ปี พ.ศ. 2 หลัก) */
+export function thDateShort(value: string | Date | null | undefined): string {
+  if (!value) return '–';
+  const d = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
+  return `${d.getDate()}/${d.getMonth() + 1}/${String((d.getFullYear() + 543) % 100).padStart(2, '0')}`;
+}
+
+/** วันที่เต็มแบบไทย เช่น 29 กรกฎาคม 2569 */
+export function thDateLong(value: string | Date | null | undefined): string {
+  if (!value) return '–';
+  const d = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
+  return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+}
+
 export function thDateTime(value: string | Date | null | undefined): string {
   if (!value) return '–';
   return DATE_TIME.format(new Date(value));

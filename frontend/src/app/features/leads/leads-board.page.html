@@ -1,0 +1,76 @@
+<div class="page wide">
+  <div class="page-head">
+    <div>
+      <h1>ลีดและงานที่กำลังเจรจา</h1>
+      <p>ลากการ์ดไปคอลัมน์ถัดไปเมื่อสถานะเปลี่ยน งานที่ได้/ไม่ได้แสดงย้อนหลัง 60 วัน</p>
+    </div>
+    <button *appCan="Perm.LEAD_WRITE" mat-flat-button class="btn-primary" (click)="add()">
+      <mat-icon>add</mat-icon> เพิ่มลีด
+    </button>
+  </div>
+
+  <div class="toolbar">
+    <mat-form-field class="search" subscriptSizing="dynamic">
+      <mat-label>ค้นหาชื่องาน ลูกค้า หรือที่ตั้ง</mat-label>
+      <mat-icon matPrefix>search</mat-icon>
+      <input matInput [(ngModel)]="q" (ngModelChange)="onSearch()" />
+    </mat-form-field>
+    <mat-button-toggle-group [(ngModel)]="mine" (change)="load()" aria-label="ตัวกรองผู้รับผิดชอบ">
+      <mat-button-toggle value="all">ทั้งหมด</mat-button-toggle>
+      <mat-button-toggle value="mine">ของฉัน</mat-button-toggle>
+    </mat-button-toggle-group>
+  </div>
+
+  <div class="board" cdkDropListGroup>
+    @for (col of columns(); track col.code) {
+      <section class="column" [class.won]="col.code === 'won'" [class.lost]="col.code === 'lost'">
+        <header>
+          <h2>{{ col.label }}</h2>
+          <span class="count">{{ col.items.length }}</span>
+        </header>
+        @if (col.total > 0) {
+          <div class="sum muted">งบรวม {{ col.total | money }}</div>
+        }
+        <div
+          class="cards"
+          cdkDropList
+          [cdkDropListData]="col.code"
+          (cdkDropListDropped)="drop($event)"
+          [attr.aria-label]="'คอลัมน์ ' + col.label"
+        >
+          @for (l of col.items; track l.id) {
+            <article
+              class="card"
+              cdkDrag
+              [cdkDragData]="l"
+              [cdkDragDisabled]="!auth.can(Perm.LEAD_WRITE)"
+              tabindex="0"
+              (click)="open(l)"
+              (keydown.enter)="open(l)"
+            >
+              <div class="title">{{ l.title }}</div>
+              <div class="customer">{{ l.customerName }}</div>
+              <div class="meta">
+                <span class="chip">{{ jobTypes[l.jobType] }}</span>
+                @if (l.budgetEst) {
+                  <span class="num">{{ l.budgetEst | money }}</span>
+                }
+              </div>
+              <div class="foot">
+                @if (l.nextFollowupAt && l.status !== 'won' && l.status !== 'lost') {
+                  <span class="follow" [class]="followupClass(l)"><mat-icon>event</mat-icon>{{ date(l.nextFollowupAt) }}</span>
+                }
+                <span class="grow"></span>
+                @if (l.ownerName) {
+                  <span class="owner" [title]="l.ownerName">{{ l.ownerName.slice(0, 1) }}</span>
+                }
+              </div>
+            </article>
+          } @empty {
+            <p class="empty muted">ไม่มีงาน</p>
+          }
+        </div>
+      </section>
+    }
+  </div>
+</div>
