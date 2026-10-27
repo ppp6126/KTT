@@ -42,4 +42,19 @@ public final class Perm {
 
     public static final String ATTACHMENT_READ = "attachment.read";
     public static final String ATTACHMENT_WRITE = "attachment.write";
+
+    public static final String PROJECT_READ = "project.read";
+    public static final String PROJECT_READ_ALL = "project.read_all";
+    public static final String PROJECT_WRITE = "project.write";
+    public static final String SITE_REPORT = "site.report";
+
+    public static final String CONTRACT_READ = "contract.read";
+    public static final String CONTRACT_WRITE = "contract.write";
+    public static final String CONTRACT_APPROVE = "contract.approve";
+
+    public static final String FINANCE_READ = "finance.read";
+    public static final String FINANCE_WRITE = "finance.write";
+    public static final String FINANCE_VOID = "finance.void";
+
+    public static final String NOTIFICATION_READ = "notification.read";
 }

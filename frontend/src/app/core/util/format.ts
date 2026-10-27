@@ -113,4 +113,32 @@ export const ENTITY_LABEL: Record<string, string> = {
   lead: 'ลีด',
   quotation: 'ใบเสนอราคา',
   boq: 'BOQ',
+  project: 'โครงการ',
+  contract: 'สัญญา',
+  change_order: 'งานเพิ่ม-ลด',
+  daily_report: 'รายงานประจำวัน',
+  project_issue: 'ปัญหา/ความเสี่ยง',
+  punch_item: 'Punch list',
+  qc_inspection: 'ตรวจ QC',
+  qc_template: 'แม่แบบ QC',
+  safety_log: 'ความปลอดภัย',
+  sales_doc: 'เอกสารการเงิน',
 };
+
+/** วันนี้ตามเวลาเครื่องในรูปแบบ yyyy-mm-dd (ใช้กับ input type=date) */
+export function todayIso(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function daysBetween(fromIso: string, toIso: string): number {
+  return Math.round((new Date(`${toIso}T00:00:00`).getTime() - new Date(`${fromIso}T00:00:00`).getTime()) / 86400000);
+}

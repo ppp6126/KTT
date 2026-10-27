@@ -32,6 +32,13 @@
                 </button>
               }
             }
+            @if (qt.status === 'accepted') {
+              @if (qt.projectId) {
+                <a mat-stroked-button [routerLink]="['/projects', qt.projectId]"><mat-icon>construction</mat-icon> ไปที่โครงการ</a>
+              } @else if (auth.can(Perm.CONTRACT_WRITE) && auth.can(Perm.PROJECT_WRITE)) {
+                <button mat-flat-button class="btn-primary" (click)="toContract()"><mat-icon>contract</mat-icon> สร้างโครงการและสัญญา</button>
+              }
+            }
             @if (qt.status === 'sent' || qt.status === 'expired') {
               <button mat-flat-button class="btn-primary" (click)="accept()">ลูกค้าอนุมัติ</button>
               <button mat-stroked-button (click)="reject()">ลูกค้าปฏิเสธ</button>
