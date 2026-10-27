@@ -69,6 +69,25 @@ export const routes: Routes = [
     loadComponent: () => import('./features/print/progress-print.page').then((m) => m.ProgressPrintPage),
   },
 
+  {
+    path: 'print/po/:id',
+    canActivate: [authGuard, permissionGuard(Perm.PURCHASE_READ)],
+    title: 'พิมพ์ใบสั่งซื้อ | KTT',
+    loadComponent: () => import('./features/print/purchase-print.page').then((m) => m.PoPrintPage),
+  },
+  {
+    path: 'print/pv/:id',
+    canActivate: [authGuard, permissionGuard(Perm.AP_READ)],
+    title: 'พิมพ์ใบสำคัญจ่าย | KTT',
+    loadComponent: () => import('./features/print/purchase-print.page').then((m) => m.PvPrintPage),
+  },
+  {
+    path: 'print/wht/:id',
+    canActivate: [authGuard, permissionGuard(Perm.AP_READ, Perm.TAX_REPORT)],
+    title: 'หนังสือรับรองหัก ณ ที่จ่าย | KTT',
+    loadComponent: () => import('./features/print/wht-print.page').then((m) => m.WhtPrintPage),
+  },
+
   // ---------- แอปหลัก
   {
     path: '',
@@ -224,6 +243,96 @@ export const routes: Routes = [
         canActivate: [permissionGuard(Perm.FINANCE_READ)],
         title: 'ลูกหนี้คงค้าง | KTT',
         loadComponent: () => import('./features/finance/receivables.page').then((m) => m.ReceivablesPage),
+      },
+      {
+        path: 'purchase',
+        canActivate: [permissionGuard(Perm.PURCHASE_REQUEST, Perm.PURCHASE_READ)],
+        title: 'จัดซื้อ | KTT',
+        loadComponent: () => import('./features/purchase/pr-list.page').then((m) => m.PurchasePage),
+      },
+      {
+        path: 'purchase/requests/:id',
+        canActivate: [permissionGuard(Perm.PURCHASE_REQUEST, Perm.PURCHASE_READ)],
+        title: 'ใบขอซื้อ | KTT',
+        loadComponent: () => import('./features/purchase/pr.page').then((m) => m.PrPage),
+      },
+      {
+        path: 'purchase/orders/:id',
+        canActivate: [permissionGuard(Perm.PURCHASE_READ)],
+        title: 'ใบสั่งซื้อ | KTT',
+        loadComponent: () => import('./features/purchase/po.page').then((m) => m.PoPage),
+      },
+      {
+        path: 'suppliers',
+        canActivate: [permissionGuard(Perm.PURCHASE_READ, Perm.AP_READ, Perm.SUBCONTRACT_READ)],
+        title: 'ผู้ขายและผู้รับเหมาช่วง | KTT',
+        loadComponent: () => import('./features/purchase/suppliers.page').then((m) => m.SuppliersPage),
+      },
+      {
+        path: 'stock',
+        canActivate: [permissionGuard(Perm.STOCK_READ)],
+        title: 'คลังวัสดุ | KTT',
+        loadComponent: () => import('./features/stock/stock.page').then((m) => m.StockPage),
+      },
+      {
+        path: 'subcontracts',
+        canActivate: [permissionGuard(Perm.SUBCONTRACT_READ)],
+        title: 'ผู้รับเหมาช่วง | KTT',
+        loadComponent: () => import('./features/subcontract/subcontract.page').then((m) => m.SubcontractList),
+      },
+      {
+        path: 'subcontracts/:id',
+        canActivate: [permissionGuard(Perm.SUBCONTRACT_READ)],
+        title: 'สัญญาจ้างช่วง | KTT',
+        loadComponent: () => import('./features/subcontract/subcontract.page').then((m) => m.SubcontractPage),
+      },
+      {
+        path: 'labor',
+        canActivate: [permissionGuard(Perm.LABOR_READ)],
+        title: 'ค่าแรง | KTT',
+        loadComponent: () => import('./features/labor/labor.page').then((m) => m.LaborPage),
+      },
+      {
+        path: 'ap',
+        canActivate: [permissionGuard(Perm.AP_READ)],
+        title: 'เจ้าหนี้ | KTT',
+        loadComponent: () => import('./features/ap/ap-list.page').then((m) => m.ApPage),
+      },
+      {
+        path: 'ap/bills/:id',
+        canActivate: [permissionGuard(Perm.AP_READ)],
+        title: 'ใบตั้งหนี้ | KTT',
+        loadComponent: () => import('./features/ap/bill.page').then((m) => m.BillPage),
+      },
+      {
+        path: 'ap/vouchers/:id',
+        canActivate: [permissionGuard(Perm.AP_READ)],
+        title: 'ใบสำคัญจ่าย | KTT',
+        loadComponent: () => import('./features/ap/voucher.page').then((m) => m.VoucherPage),
+      },
+      {
+        path: 'reports/tax',
+        canActivate: [permissionGuard(Perm.TAX_REPORT)],
+        title: 'รายงานภาษี | KTT',
+        loadComponent: () => import('./features/reports/tax.page').then((m) => m.TaxPage),
+      },
+      {
+        path: 'reports/cost',
+        canActivate: [permissionGuard(Perm.COST_VIEW)],
+        title: 'ต้นทุนโครงการ | KTT',
+        loadComponent: () => import('./features/reports/cost.page').then((m) => m.CostPage),
+      },
+      {
+        path: 'reports/cost/:id',
+        canActivate: [permissionGuard(Perm.COST_VIEW)],
+        title: 'ต้นทุนโครงการ | KTT',
+        loadComponent: () => import('./features/reports/cost.page').then((m) => m.CostDetailPage),
+      },
+      {
+        path: 'reports/cash-flow',
+        canActivate: [permissionGuard(Perm.FINANCE_READ, Perm.AP_READ)],
+        title: 'กระแสเงินสด | KTT',
+        loadComponent: () => import('./features/reports/cashflow.page').then((m) => m.CashflowPage),
       },
       {
         path: 'settings',

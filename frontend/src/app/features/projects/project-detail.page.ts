@@ -21,8 +21,9 @@ import { PROJECT_STATUS, Project, ProjectsApi, Schedule } from './projects.api';
 import { SCurve } from './s-curve';
 import { ScheduleEditor } from './schedule-editor';
 import { DailyTab, IssuesTab, PunchTab, QcTab, SafetyTab } from './site-tabs';
+import { ProjectCostView } from '../reports/project-cost';
 
-const TABS = ['overview', 'schedule', 'daily', 'issues', 'punch', 'qc', 'safety', 'docs', 'contract'] as const;
+const TABS = ['overview', 'schedule', 'daily', 'issues', 'punch', 'qc', 'safety', 'docs', 'contract', 'cost'] as const;
 
 @Component({
   selector: 'app-project-detail-page',
@@ -42,6 +43,7 @@ const TABS = ['overview', 'schedule', 'daily', 'issues', 'punch', 'qc', 'safety'
     PunchTab,
     QcTab,
     SafetyTab,
+    ProjectCostView,
     AttachmentPanel,
     ContractPage,
   ],
@@ -181,6 +183,13 @@ const TABS = ['overview', 'schedule', 'daily', 'issues', 'punch', 'qc', 'safety'
               </ng-template>
             </mat-tab>
           }
+          @if (canCost) {
+            <mat-tab label="ต้นทุน">
+              <ng-template matTabContent>
+                <div class="tab-body"><app-project-cost [projectId]="p.id" /></div>
+              </ng-template>
+            </mat-tab>
+          }
         </mat-tab-group>
       </div>
     }
@@ -222,6 +231,9 @@ export class ProjectDetailPage implements OnInit {
   readonly auth = inject(AuthService);
   readonly Perm = Perm;
   readonly canContract = this.auth.can(Perm.CONTRACT_READ) || this.auth.can(Perm.FINANCE_READ);
+  readonly canCost = this.auth.can(Perm.COST_VIEW);
+  /** แท็บที่ผู้ใช้เห็นจริง (แท็บสัญญาและต้นทุนขึ้นกับสิทธิ์) ใช้แปลงชื่อแท็บ <-> ลำดับ */
+  private readonly tabs = TABS.filter((t) => (t !== 'contract' || this.canContract) && (t !== 'cost' || this.canCost));
 
   readonly id = input.required<string>();
   readonly tab = input<string>();
@@ -235,7 +247,7 @@ export class ProjectDetailPage implements OnInit {
   constructor() {
     effect(() => {
       const t = this.tab();
-      const i = TABS.indexOf((t ?? 'overview') as (typeof TABS)[number]);
+      const i = this.tabs.indexOf((t ?? 'overview') as (typeof TABS)[number]);
       this.selected.set(i < 0 ? 0 : i);
     });
   }
@@ -251,12 +263,12 @@ export class ProjectDetailPage implements OnInit {
 
   goTab(i: number): void {
     this.selected.set(i);
-    const key = TABS[i] ?? 'overview';
+    const key = this.tabs[i] ?? 'overview';
     this.location.replaceState(key === 'overview' ? `/projects/${this.id()}` : `/projects/${this.id()}/${key}`);
   }
 
   goTabKey(key: (typeof TABS)[number]): void {
-    this.goTab(TABS.indexOf(key));
+    this.goTab(this.tabs.indexOf(key));
   }
 
   onScheduleSaved(s: Schedule): void {

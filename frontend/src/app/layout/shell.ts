@@ -16,7 +16,8 @@ interface NavItem {
   label: string;
   icon: string;
   link: string;
-  perm?: string;
+  /** ต้องมีสิทธิ์อย่างใดอย่างหนึ่ง */
+  perm?: string | string[];
   exact?: boolean;
 }
 
@@ -48,6 +49,17 @@ const NAV: NavGroup[] = [
     items: [
       { label: 'โครงการ', icon: 'construction', link: '/projects', perm: Perm.PROJECT_READ },
       { label: 'สัญญา', icon: 'contract', link: '/contracts', perm: Perm.CONTRACT_READ },
+      { label: 'ผู้รับเหมาช่วง', icon: 'engineering', link: '/subcontracts', perm: Perm.SUBCONTRACT_READ },
+      { label: 'ค่าแรง', icon: 'badge', link: '/labor', perm: Perm.LABOR_READ },
+      { label: 'ต้นทุนโครงการ', icon: 'query_stats', link: '/reports/cost', perm: Perm.COST_VIEW },
+    ],
+  },
+  {
+    label: 'จัดซื้อและคลัง',
+    items: [
+      { label: 'จัดซื้อ', icon: 'shopping_cart', link: '/purchase', perm: [Perm.PURCHASE_REQUEST, Perm.PURCHASE_READ] },
+      { label: 'คลังวัสดุ', icon: 'warehouse', link: '/stock', perm: Perm.STOCK_READ },
+      { label: 'ผู้ขาย/ผู้รับเหมา', icon: 'storefront', link: '/suppliers', perm: [Perm.PURCHASE_READ, Perm.AP_READ, Perm.SUBCONTRACT_READ] },
     ],
   },
   {
@@ -55,6 +67,9 @@ const NAV: NavGroup[] = [
     items: [
       { label: 'เอกสารการเงิน', icon: 'receipt_long', link: '/finance/docs', perm: Perm.FINANCE_READ },
       { label: 'ลูกหนี้คงค้าง', icon: 'account_balance_wallet', link: '/finance/receivables', perm: Perm.FINANCE_READ },
+      { label: 'เจ้าหนี้', icon: 'payments', link: '/ap', perm: Perm.AP_READ },
+      { label: 'กระแสเงินสด', icon: 'waterfall_chart', link: '/reports/cash-flow', perm: [Perm.FINANCE_READ, Perm.AP_READ] },
+      { label: 'รายงานภาษี', icon: 'percent', link: '/reports/tax', perm: Perm.TAX_REPORT },
     ],
   },
   {
@@ -95,7 +110,7 @@ export class Shell {
 
   readonly nav = computed(() => {
     const perms = this.auth.permissions();
-    return NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || perms.has(i.perm) || (i.perm === Perm.LEAD_READ && perms.has(Perm.LEAD_READ_ALL)) || (i.perm === Perm.PROJECT_READ && perms.has(Perm.PROJECT_READ_ALL)) || (i.perm === Perm.CONTRACT_READ && perms.has(Perm.FINANCE_READ)) || (i.perm === Perm.QUOTATION_APPROVE && perms.has(Perm.CONTRACT_APPROVE))) })).filter(
+    return NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || (Array.isArray(i.perm) ? i.perm.some((x) => perms.has(x)) : perms.has(i.perm)) || (i.perm === Perm.LEAD_READ && perms.has(Perm.LEAD_READ_ALL)) || (i.perm === Perm.PROJECT_READ && perms.has(Perm.PROJECT_READ_ALL)) || (i.perm === Perm.CONTRACT_READ && perms.has(Perm.FINANCE_READ)) || (i.perm === Perm.QUOTATION_APPROVE && perms.has(Perm.CONTRACT_APPROVE))) })).filter(
       (g) => g.items.length > 0,
     );
   });
