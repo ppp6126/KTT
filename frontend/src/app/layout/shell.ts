@@ -10,6 +10,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
 import { Perm } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
+import { NotificationBell } from './notification-bell';
 
 interface NavItem {
   label: string;
@@ -28,7 +29,19 @@ const NAV: NavGroup[] = [
   { label: null, items: [{ label: 'หน้าแรก', icon: 'home', link: '/', exact: true }] },
   {
     label: 'งานขาย',
-    items: [{ label: 'ลูกค้า', icon: 'contacts', link: '/customers', perm: Perm.CUSTOMER_READ }],
+    items: [
+      { label: 'ลีดและงานที่เจรจา', icon: 'view_kanban', link: '/leads', perm: Perm.LEAD_READ },
+      { label: 'ใบเสนอราคา', icon: 'request_quote', link: '/quotations', perm: Perm.QUOTATION_READ },
+      { label: 'รออนุมัติ', icon: 'approval', link: '/approvals', perm: Perm.QUOTATION_APPROVE },
+      { label: 'ลูกค้า', icon: 'contacts', link: '/customers', perm: Perm.CUSTOMER_READ },
+    ],
+  },
+  {
+    label: 'ประมาณราคา',
+    items: [
+      { label: 'ฐานราคากลาง', icon: 'sell', link: '/pricing', perm: Perm.PRICING_READ },
+      { label: 'แม่แบบ BOQ', icon: 'library_books', link: '/boq-templates', perm: Perm.BOQ_READ },
+    ],
   },
   {
     label: 'ผู้ดูแลระบบ',
@@ -36,6 +49,7 @@ const NAV: NavGroup[] = [
       { label: 'ผู้ใช้งาน', icon: 'group', link: '/admin/users', perm: Perm.USER_READ },
       { label: 'บทบาทและสิทธิ์', icon: 'admin_panel_settings', link: '/admin/roles', perm: Perm.ROLE_MANAGE },
       { label: 'ประวัติการใช้งาน', icon: 'history', link: '/admin/audit', perm: Perm.AUDIT_READ },
+      { label: 'ตั้งค่า', icon: 'settings', link: '/settings', perm: Perm.SETTINGS_MANAGE },
     ],
   },
 ];
@@ -51,6 +65,7 @@ const NAV: NavGroup[] = [
     MatIconModule,
     MatMenuModule,
     MatTooltipModule,
+    NotificationBell,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
@@ -66,7 +81,7 @@ export class Shell {
 
   readonly nav = computed(() => {
     const perms = this.auth.permissions();
-    return NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || perms.has(i.perm)) })).filter(
+    return NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || perms.has(i.perm) || (i.perm === Perm.LEAD_READ && perms.has(Perm.LEAD_READ_ALL))) })).filter(
       (g) => g.items.length > 0,
     );
   });

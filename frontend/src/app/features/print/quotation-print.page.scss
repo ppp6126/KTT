@@ -1,0 +1,286 @@
+/* สีหัวตารางตามแบบฟอร์มเดิมของบริษัท (ส้มอ่อน) */
+.tinted {
+  background: #fadccd;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.copy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.sheet {
+  border: 1pt solid #333;
+  padding: 8mm 8mm 6mm;
+  display: flex;
+  flex-direction: column;
+}
+
+.top {
+  display: grid;
+  grid-template-columns: 28mm 1fr 60mm;
+  gap: 4mm;
+  align-items: start;
+}
+
+.logo img {
+  width: 30mm;
+  max-height: 28mm;
+  object-fit: contain;
+}
+
+.company {
+  text-align: center;
+  font-size: 9.5pt;
+  line-height: 1.5;
+
+  .en {
+    font-size: 13pt;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .th {
+    font-weight: 600;
+    font-size: 10.5pt;
+  }
+}
+
+.title-box {
+  font-size: 9pt;
+
+  .head {
+    border: 0.6pt solid #555;
+    text-align: center;
+    padding: 4pt;
+    margin-bottom: 6pt;
+    font-weight: 600;
+  }
+
+  .doc-title {
+    font-size: 12pt;
+    margin: 2pt 0;
+  }
+
+  .kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 6pt;
+    white-space: nowrap;
+  }
+}
+
+.party {
+  display: grid;
+  grid-template-columns: 1fr 70mm;
+  border: 0.6pt solid #555;
+  margin: 5mm 0 4mm;
+  font-size: 9.5pt;
+
+  .left {
+    padding: 4pt 6pt;
+    border-right: 0.6pt solid #555;
+  }
+
+  .right {
+    padding: 4pt 6pt;
+  }
+
+  .kv2 {
+    display: grid;
+    grid-template-columns: 46mm 1fr;
+    border-bottom: 0.4pt dotted #999;
+    padding: 2pt 0;
+  }
+
+  .kv3 {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6pt;
+    padding: 2pt 0;
+  }
+}
+
+.items {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+
+  th {
+    border: 0.6pt solid #555;
+    padding: 3pt;
+    font-weight: 600;
+
+    small {
+      font-weight: 600;
+    }
+  }
+
+  td {
+    border-left: 0.6pt solid #555;
+    border-right: 0.6pt solid #555;
+    padding: 2pt 5pt;
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0.6pt solid #555;
+  }
+
+  .row-heading td {
+    font-weight: 700;
+    padding-top: 5pt;
+  }
+
+  .row-note td {
+    font-style: italic;
+    color: #333;
+  }
+
+  .filler td {
+    height: 15pt;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+}
+
+.bottom {
+  display: grid;
+  grid-template-columns: 1fr 86mm;
+  gap: 4mm;
+  margin-top: 3mm;
+  font-size: 9.5pt;
+  break-inside: avoid;
+}
+
+.pay {
+  .pay-title {
+    margin-bottom: 4pt;
+  }
+
+  .line {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    gap: 4pt;
+    margin-bottom: 4pt;
+    align-items: end;
+  }
+
+  .dots {
+    border-bottom: 0.4pt dotted #666;
+    min-height: 12pt;
+    padding: 0 3pt;
+
+    &.wide {
+      grid-column: span 3;
+    }
+  }
+}
+
+.sum {
+  width: 100%;
+  border-collapse: collapse;
+
+  td {
+    border: 0.6pt solid #555;
+    padding: 4pt 6pt;
+  }
+
+  td:first-child {
+    text-align: center;
+  }
+
+  .net td {
+    font-weight: 700;
+  }
+}
+
+.words {
+  width: 120mm;
+  margin: 4mm 0 0 18mm;
+  padding: 3pt;
+  border: 0.6pt solid #555;
+  text-align: center;
+  font-size: 9.5pt;
+  break-inside: avoid;
+}
+
+.terms {
+  margin-top: 4mm;
+  font-size: 9pt;
+  break-inside: avoid;
+
+  .pre {
+    white-space: pre-line;
+  }
+}
+
+.signs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8mm;
+  margin-top: 6mm;
+  font-size: 9.5pt;
+  break-inside: avoid;
+}
+
+.sign-box {
+  border: 0.6pt solid #555;
+  padding: 4pt 8pt 6pt;
+  text-align: center;
+
+  .space {
+    height: 22mm;
+    position: relative;
+  }
+
+  .imgs {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4mm;
+  }
+
+  .stamp {
+    height: 18mm;
+    opacity: 0.9;
+  }
+
+  .sig {
+    height: 16mm;
+  }
+
+  &.customer .space {
+    height: 18mm;
+  }
+}
+
+.foot {
+  margin-top: auto;
+  padding: 3pt;
+  background: #6b6b6b;
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+  font-size: 10pt;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  .sheet {
+    border: 1pt solid #333;
+    padding: 6mm;
+    min-height: 279mm;
+  }
+}

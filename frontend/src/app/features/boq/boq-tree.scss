@@ -1,0 +1,141 @@
+.table-wrap {
+  overflow-x: auto;
+}
+
+.tree {
+  width: 100%;
+  min-width: 1060px;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+
+  &.template {
+    min-width: 720px;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f1f3f2;
+    color: var(--ktt-steel);
+    font-weight: 500;
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--ktt-line);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 2px 6px;
+    border-bottom: 1px solid #eceeed;
+    vertical-align: middle;
+    height: 36px;
+  }
+
+  .num {
+    text-align: right;
+  }
+
+  input {
+    width: 100%;
+    height: 30px;
+    padding: 0 6px;
+    border: 1px solid transparent;
+    border-radius: var(--ktt-radius-s);
+    background: transparent;
+    font: inherit;
+    color: inherit;
+
+    &:hover {
+      border-color: var(--ktt-line);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--ktt-ink-2);
+      background: #fff;
+    }
+
+    &[type='number'] {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    &.linked {
+      background: #eef3f6;
+    }
+  }
+
+  tr.group td {
+    background: #f7f8f7;
+  }
+
+  tr.group.lvl-1 td {
+    background: #eef1f3;
+
+    .desc {
+      font-weight: 600;
+      color: var(--ktt-ink);
+    }
+  }
+
+  tr.group .desc {
+    font-weight: 600;
+  }
+
+  .strong {
+    font-weight: 600;
+  }
+
+  .c-no {
+    width: 64px;
+    color: var(--ktt-steel);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .c-desc {
+    min-width: 280px;
+  }
+
+  .c-qty {
+    width: 96px;
+  }
+
+  .c-unit {
+    width: 84px;
+  }
+
+  .c-money {
+    width: 112px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .c-link {
+    width: 160px;
+  }
+
+  .c-act {
+    width: 44px;
+    text-align: right;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 32px;
+  }
+}
+
+.desc-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.note {
+  font-size: 0.8rem;
+  padding-left: 7px;
+}
+
+.add-root {
+  margin-top: 12px;
+}

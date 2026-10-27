@@ -1,0 +1,170 @@
+<app-print-toolbar [title]="q()?.displayNo ?? 'ใบเสนอราคา'" (printed)="onPrint()" (closed)="close()">
+  <label class="copy-toggle">
+    <input type="checkbox" [checked]="copy() === 'copy'" (change)="copy.set(copy() === 'copy' ? 'original' : 'copy')" />
+    พิมพ์เป็น "สำเนา"
+  </label>
+</app-print-toolbar>
+
+@if (q(); as d) {
+  @let c = header()?.company;
+  <div class="sheet">
+    @if (draft()) {
+      <div class="watermark">ร่าง</div>
+    }
+
+    <header class="top">
+      <div class="logo">
+        @if (logo()) {
+          <img [src]="logo()" alt="โลโก้บริษัท" />
+        }
+      </div>
+      <div class="company">
+        <div class="en">{{ c?.nameEn }}</div>
+        <div class="th">{{ c?.nameTh }}</div>
+        <div>เลขประจำตัวผู้เสียภาษีอากร {{ c?.taxId }}{{ c?.branchNo && c?.branchNo !== '00000' ? ' สาขา ' + c?.branchNo : '' }}</div>
+        <div class="addr">{{ c?.address }}</div>
+        <div>โทรศัพท์ {{ c?.phone }}</div>
+      </div>
+      <div class="title-box">
+        <div class="tinted head">
+          <div>{{ copy() === 'copy' ? 'สำเนา' : 'ต้นฉบับ' }}</div>
+          <div class="doc-title">ใบเสนอราคา</div>
+          <div class="doc-sub">Quotation</div>
+        </div>
+        <div class="kv"><span>เลขที่ใบเสนอราคา /No.</span><b>{{ d.displayNo }}</b></div>
+        <div class="kv"><span>วันที่/Date</span><b>{{ date(d.issueDate) }}</b></div>
+      </div>
+    </header>
+
+    <section class="party">
+      <div class="left">
+        <div class="kv2"><span>ชื่อลูกค้า / Customers:</span><span>{{ d.customerName }}</span></div>
+        <div class="kv2"><span>ที่อยู่ / Address:</span><span class="addr">{{ d.customerAddress }}</span></div>
+        <div class="kv2"><span>โทรศัพท์ / Contact:</span><span>{{ d.customerPhone }}</span></div>
+        <div class="kv2">
+          <span>เลขประจำตัวผู้เสียภาษี / Tax ID:</span>
+          <span>{{ d.customerTaxId }}{{ d.customerTaxId && d.customerBranchNo ? (d.customerBranchNo === '00000' ? ' (สำนักงานใหญ่)' : ' สาขา ' + d.customerBranchNo) : '' }}</span>
+        </div>
+      </div>
+      <div class="right">
+        <div class="kv3"><b>อ้างอิงใบเสนอราคาเลขที่:</b><b>{{ d.docNo }}</b></div>
+        <div class="kv3"><b>อ้างอิงใบสั่งซื้อเลขที่:</b><span>{{ d.referenceNo || '-' }}</span></div>
+        <div class="kv3"><b>เงื่อนไขการชำระเงิน:</b><span>{{ d.paymentCondition || '-' }}</span></div>
+        <div class="kv3"><b>ยืนราคาถึง:</b><span>{{ date(d.validUntil) }}</span></div>
+      </div>
+    </section>
+
+    <table class="items">
+      <thead>
+        <tr class="tinted">
+          <th style="width: 9%">ลำดับที่<br /><small>Item</small></th>
+          <th>รายการ<br /><small>Description</small></th>
+          <th style="width: 11%">จำนวน<br /><small>Quantity</small></th>
+          <th style="width: 9%">หน่วย<br /><small>Unit</small></th>
+          <th style="width: 16%">ราคา/หน่วย<br /><small>Unit Price</small></th>
+          <th style="width: 16%">จำนวนเงิน<br /><small>Amount</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (it of d.items; track $index; let i = $index) {
+          @if (it.itemType === 'item') {
+            <tr>
+              <td class="center">{{ itemNo(i) }}</td>
+              <td>{{ it.description }}</td>
+              <td class="num">{{ it.quantity | qty }}</td>
+              <td class="center">{{ it.unit }}</td>
+              <td class="num">{{ it.unitPrice | money }}</td>
+              <td class="num">{{ it.amount | money }}</td>
+            </tr>
+          } @else {
+            <tr [class]="'row-' + it.itemType">
+              <td></td>
+              <td>{{ it.description }}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          }
+        }
+        @for (f of fillers(); track f) {
+          <tr class="filler"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        }
+      </tbody>
+    </table>
+
+    <section class="bottom">
+      <div class="pay">
+        <div class="pay-title">รายการรับชำระเงิน</div>
+        <div class="line"><span>ธนาคาร/Bank</span><span class="dots">{{ c?.bankName }}</span><span>เลขที่/Chq</span><span class="dots">{{ c?.bankAccountNo }}</span></div>
+        <div class="line"><span>สาขา/Branch</span><span class="dots">{{ c?.bankBranch }}</span><span>ลว./Date</span><span class="dots">-</span></div>
+        <div class="line"><span>ชื่อบัญชี/Account Name</span><span class="dots wide">{{ c?.bankAccountName }}</span></div>
+        <div class="line"><span>จำนวนเงิน/Amount</span><span class="dots wide center">{{ d.totalAmount | money }}</span></div>
+      </div>
+      <table class="sum">
+        <tr><td>รวมเงิน</td><td class="num">{{ d.subtotal | money }}</td></tr>
+        @if (d.discountAmount > 0) {
+          <tr><td>ส่วนลด {{ d.discountPct }}%</td><td class="num">-{{ d.discountAmount | money }}</td></tr>
+        }
+        @if (d.overheadAmount > 0) {
+          <tr><td>ค่าดำเนินการ {{ d.overheadPct }}%</td><td class="num">{{ d.overheadAmount | money }}</td></tr>
+        }
+        <tr><td>ภาษีมูลค่าเพิ่ม {{ d.vatPct }}%</td><td class="num">{{ d.vatEnabled ? (d.vatAmount | money) : '-' }}</td></tr>
+        @if (d.roundingAmount !== 0) {
+          <tr><td>ส่วนปัดเศษ</td><td class="num">{{ d.roundingAmount | money }}</td></tr>
+        }
+        <tr class="tinted net"><td>ยอดเงินสุทธิ NET AMOUNT</td><td class="num">{{ d.totalAmount | money }}</td></tr>
+        @if (d.whtAmount > 0) {
+          <tr><td>หัก ณ ที่จ่าย {{ d.whtPct }}%</td><td class="num">-{{ d.whtAmount | money }}</td></tr>
+          <tr><td>ยอดชำระหลังหัก ณ ที่จ่าย</td><td class="num">{{ d.totalAmount - d.whtAmount | money }}</td></tr>
+        }
+      </table>
+    </section>
+
+    <div class="words tinted">( {{ words(d.totalAmount) }} )</div>
+
+    @if (d.durationDays || d.warrantyTerms || d.scopeIn || d.scopeOut || d.notes) {
+      <section class="terms">
+        @if (d.durationDays) {
+          <div><b>ระยะเวลาก่อสร้าง:</b> {{ d.durationDays }} วัน</div>
+        }
+        @if (d.warrantyTerms) {
+          <div><b>การรับประกัน:</b> {{ d.warrantyTerms }}</div>
+        }
+        @if (d.scopeIn) {
+          <div><b>ขอบเขตงาน:</b> <span class="pre">{{ d.scopeIn }}</span></div>
+        }
+        @if (d.scopeOut) {
+          <div><b>ไม่รวมในราคา:</b> <span class="pre">{{ d.scopeOut }}</span></div>
+        }
+        @if (d.notes) {
+          <div><b>หมายเหตุ:</b> <span class="pre">{{ d.notes }}</span></div>
+        }
+      </section>
+    }
+
+    <section class="signs">
+      <div class="sign-box customer">
+        <div class="space"></div>
+        <div>( ........................................................ )</div>
+        <div>ผู้อนุมัติสั่งจ้าง / ลูกค้า</div>
+        <div>วันที่ ......../......../........</div>
+      </div>
+      <div class="sign-box">
+        <div>ในนาม {{ c?.nameTh }}</div>
+        <div class="space imgs">
+          @if (logo()) {
+            <img class="stamp" [src]="logo()" alt="" />
+          }
+          @if (signature()) {
+            <img class="sig" [src]="signature()" alt="ลายเซ็น" />
+          }
+        </div>
+        <div>( {{ c?.signerName }} )</div>
+        <div>{{ c?.signerTitle }}</div>
+      </div>
+    </section>
+
+    <footer class="foot">{{ c?.address }}</footer>
+  </div>
+}

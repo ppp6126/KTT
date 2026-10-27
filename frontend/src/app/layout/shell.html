@@ -43,6 +43,7 @@
         </button>
       }
       <span class="grow"></span>
+      <app-notification-bell />
       @if (auth.user(); as u) {
         <button class="user-btn" [matMenuTriggerFor]="userMenu" aria-label="เมนูผู้ใช้">
           <span class="avatar" aria-hidden="true">{{ initials() }}</span>

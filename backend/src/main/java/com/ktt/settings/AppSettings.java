@@ -67,4 +67,28 @@ public class AppSettings {
         JsonNode node = get(DISCOUNT_APPROVAL_THRESHOLD_PCT);
         return node == null ? new BigDecimal("5") : node.decimalValue();
     }
+
+    public String getString(String key, String def) {
+        JsonNode n = get(key);
+        return n == null || n.isNull() ? def : n.asText();
+    }
+
+    public BigDecimal getDecimal(String key, BigDecimal def) {
+        JsonNode n = get(key);
+        return n == null || n.isNull() ? def : n.decimalValue();
+    }
+
+    public boolean getBool(String key, boolean def) {
+        JsonNode n = get(key);
+        return n == null || n.isNull() ? def : n.asBoolean();
+    }
+
+    public int getInt(String key, int def) {
+        JsonNode n = get(key);
+        return n == null || n.isNull() ? def : n.asInt(def);
+    }
+
+    public void setValue(String key, Object value, UUID userId) {
+        set(key, mapper.valueToTree(value), userId);
+    }
 }

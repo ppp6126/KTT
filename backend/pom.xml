@@ -18,6 +18,7 @@
         <!-- Quarkus LTS: อัปเดตได้ด้วย `quarkus update` หรือ `mvn io.quarkus.platform:quarkus-maven-plugin:update` -->
         <quarkus.platform.version>3.20.0</quarkus.platform.version>
         <bouncycastle.version>1.78.1</bouncycastle.version>
+        <poi.version>5.2.5</poi.version>
         <compiler-plugin.version>3.13.0</compiler-plugin.version>
         <surefire-plugin.version>3.5.2</surefire-plugin.version>
         <skipITs>true</skipITs>
@@ -86,6 +87,13 @@
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
             <version>${bouncycastle.version}</version>
+        </dependency>
+
+        <!-- Excel นำเข้า/ส่งออก -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
         </dependency>
 
         <!-- Infra -->

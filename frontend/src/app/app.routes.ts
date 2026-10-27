@@ -36,6 +36,20 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/setup-mfa.page').then((m) => m.SetupMfaPage),
   },
 
+  // ---------- หน้าพิมพ์เอกสาร (ไม่มีเมนู)
+  {
+    path: 'print/quotations/:id',
+    canActivate: [authGuard, permissionGuard(Perm.QUOTATION_READ)],
+    title: 'พิมพ์ใบเสนอราคา | KTT',
+    loadComponent: () => import('./features/print/quotation-print.page').then((m) => m.QuotationPrintPage),
+  },
+  {
+    path: 'print/boq/:id',
+    canActivate: [authGuard, permissionGuard(Perm.COST_VIEW)],
+    title: 'แบบ ปร.4 ปร.5 | KTT',
+    loadComponent: () => import('./features/print/gov-form.page').then((m) => m.GovFormPage),
+  },
+
   // ---------- แอปหลัก
   {
     path: '',
@@ -65,6 +79,71 @@ export const routes: Routes = [
         canActivate: [permissionGuard(Perm.CUSTOMER_READ)],
         title: 'ข้อมูลลูกค้า | KTT',
         loadComponent: () => import('./features/customers/customer-form.page').then((m) => m.CustomerFormPage),
+      },
+      {
+        path: 'leads',
+        canActivate: [permissionGuard(Perm.LEAD_READ, Perm.LEAD_READ_ALL)],
+        title: 'ลีด | KTT',
+        loadComponent: () => import('./features/leads/leads-board.page').then((m) => m.LeadsBoardPage),
+      },
+      {
+        path: 'leads/:id',
+        canActivate: [permissionGuard(Perm.LEAD_READ, Perm.LEAD_READ_ALL)],
+        title: 'รายละเอียดลีด | KTT',
+        loadComponent: () => import('./features/leads/lead-detail.page').then((m) => m.LeadDetailPage),
+      },
+      {
+        path: 'pricing',
+        canActivate: [permissionGuard(Perm.PRICING_READ)],
+        title: 'ฐานราคากลาง | KTT',
+        loadComponent: () => import('./features/pricing/pricing.page').then((m) => m.PricingPage),
+      },
+      {
+        path: 'boqs/:id',
+        canActivate: [permissionGuard(Perm.BOQ_READ)],
+        title: 'BOQ | KTT',
+        loadComponent: () => import('./features/boq/boq-editor.page').then((m) => m.BoqEditorPage),
+      },
+      {
+        path: 'boq-templates',
+        canActivate: [permissionGuard(Perm.BOQ_READ)],
+        title: 'แม่แบบ BOQ | KTT',
+        loadComponent: () => import('./features/boq/templates.page').then((m) => m.TemplatesPage),
+      },
+      {
+        path: 'boq-templates/:id',
+        canActivate: [permissionGuard(Perm.BOQ_READ)],
+        title: 'แม่แบบ BOQ | KTT',
+        loadComponent: () => import('./features/boq/template-editor.page').then((m) => m.TemplateEditorPage),
+      },
+      {
+        path: 'settings/factor-f',
+        canActivate: [permissionGuard(Perm.BOQ_READ)],
+        title: 'ตาราง Factor F | KTT',
+        loadComponent: () => import('./features/boq/factor-tables.page').then((m) => m.FactorTablesPage),
+      },
+      {
+        path: 'quotations',
+        canActivate: [permissionGuard(Perm.QUOTATION_READ)],
+        title: 'ใบเสนอราคา | KTT',
+        loadComponent: () => import('./features/quotations/quotation-list.page').then((m) => m.QuotationListPage),
+      },
+      {
+        path: 'quotations/:id',
+        canActivate: [permissionGuard(Perm.QUOTATION_READ)],
+        title: 'ใบเสนอราคา | KTT',
+        loadComponent: () => import('./features/quotations/quotation-editor.page').then((m) => m.QuotationEditorPage),
+      },
+      {
+        path: 'approvals',
+        canActivate: [permissionGuard(Perm.QUOTATION_APPROVE)],
+        title: 'รออนุมัติ | KTT',
+        loadComponent: () => import('./features/approvals/approvals.page').then((m) => m.ApprovalsPage),
+      },
+      {
+        path: 'settings',
+        title: 'ตั้งค่า | KTT',
+        loadComponent: () => import('./features/settings/settings.page').then((m) => m.SettingsPage),
       },
       {
         path: 'admin/users',

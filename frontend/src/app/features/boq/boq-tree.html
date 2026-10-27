@@ -1,0 +1,158 @@
+<div class="table-wrap">
+  <table class="tree" [class.template]="mode() === 'template'">
+    <thead>
+      <tr>
+        <th class="c-no">ลำดับ</th>
+        <th class="c-desc">รายการ</th>
+        <th class="c-qty num">จำนวน</th>
+        <th class="c-unit">หน่วย</th>
+        @if (mode() === 'boq') {
+          @if (showCost()) {
+            <th class="c-money num">วัสดุ/หน่วย</th>
+            <th class="c-money num">ค่าแรง/หน่วย</th>
+            <th class="c-money num">เครื่องจักร/หน่วย</th>
+            <th class="c-money num">ต้นทุนรวม</th>
+          } @else {
+            <th class="c-money num">ราคา/หน่วย</th>
+          }
+          <th class="c-money num">ราคาขาย</th>
+        } @else {
+          <th class="c-link">ฐานราคา</th>
+        }
+        <th class="c-act"><span class="sr-only">จัดการแถว</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (r of rows(); track r.key; let i = $index) {
+        @let c = calc(r);
+        <tr [class.group]="!c?.leaf" [class]="'lvl-' + (c?.level ?? 1)">
+          <td class="c-no">{{ c?.number }}</td>
+          <td class="c-desc">
+            <div class="desc-wrap" [style.padding-left.px]="((c?.level ?? 1) - 1) * 18">
+              @if (editable()) {
+                <input
+                  class="desc"
+                  [(ngModel)]="r.description"
+                  (ngModelChange)="touch()"
+                  [placeholder]="c?.leaf ? 'รายละเอียดงาน' : 'ชื่อหมวด/งานย่อย'"
+                  [attr.aria-label]="'รายการ ' + c?.number"
+                />
+              } @else {
+                <span>{{ r.description }}</span>
+              }
+              @if (r.note) {
+                <span class="note muted">{{ r.note }}</span>
+              }
+            </div>
+          </td>
+          @if (c?.leaf) {
+            <td class="c-qty num">
+              @if (editable()) {
+                <input type="number" min="0" step="any" [(ngModel)]="r.quantity" (ngModelChange)="touch()" aria-label="จำนวน" />
+              } @else {
+                {{ r.quantity | qty }}
+              }
+            </td>
+            <td class="c-unit">
+              @if (editable()) {
+                <input [(ngModel)]="r.unit" (ngModelChange)="touch()" aria-label="หน่วย" />
+              } @else {
+                {{ r.unit }}
+              }
+            </td>
+            @if (mode() === 'boq') {
+              @if (showCost()) {
+                <td class="c-money num">
+                  @if (editable()) {
+                    <input type="number" min="0" step="any" [(ngModel)]="r.unitMaterialCost" (ngModelChange)="touch()" aria-label="ค่าวัสดุต่อหน่วย" [class.linked]="!!r.materialId" />
+                  } @else {
+                    {{ r.unitMaterialCost | money }}
+                  }
+                </td>
+                <td class="c-money num">
+                  @if (editable()) {
+                    <input type="number" min="0" step="any" [(ngModel)]="r.unitLabor" (ngModelChange)="touch()" aria-label="ค่าแรงต่อหน่วย" [class.linked]="!!r.laborId" />
+                  } @else {
+                    {{ r.unitLabor | money }}
+                  }
+                </td>
+                <td class="c-money num">
+                  @if (editable()) {
+                    <input type="number" min="0" step="any" [(ngModel)]="r.unitEquipment" (ngModelChange)="touch()" aria-label="ค่าเครื่องจักรต่อหน่วย" [class.linked]="!!r.equipmentId" />
+                  } @else {
+                    {{ r.unitEquipment | money }}
+                  }
+                </td>
+                <td class="c-money num">{{ c?.cost | money }}</td>
+              } @else {
+                <td class="c-money num">{{ r.serverUnitSell | money }}</td>
+              }
+              <td class="c-money num strong">{{ c?.sell | money }}</td>
+            } @else {
+              <td class="c-link">
+                @if (linked(r)) {
+                  <span class="chip" matTooltip="ราคาจะดึงจากฐานราคาเมื่อสร้าง BOQ จากแม่แบบ">
+                    {{ r.materialId ? 'วัสดุ' : '' }}{{ r.laborId ? ' แรง' : '' }}{{ r.equipmentId ? ' เครื่องจักร' : '' }}
+                  </span>
+                }
+              </td>
+            }
+          } @else {
+            <td class="c-qty"></td>
+            <td class="c-unit"></td>
+            @if (mode() === 'boq') {
+              @if (showCost()) {
+                <td class="c-money num muted">{{ c?.material | money }}</td>
+                <td class="c-money num muted">{{ c?.labor | money }}</td>
+                <td class="c-money num muted">{{ c?.equipment | money }}</td>
+                <td class="c-money num strong">{{ c?.cost | money }}</td>
+              } @else {
+                <td class="c-money"></td>
+              }
+              <td class="c-money num strong">{{ c?.sell | money }}</td>
+            } @else {
+              <td class="c-link"></td>
+            }
+          }
+          <td class="c-act">
+            @if (editable()) {
+              <button mat-icon-button type="button" [matMenuTriggerFor]="rowMenu" [attr.aria-label]="'จัดการแถว ' + c?.number">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #rowMenu="matMenu" xPosition="before">
+                @if ((c?.level ?? 1) < 3) {
+                  <button mat-menu-item (click)="addChild(i)"><mat-icon>subdirectory_arrow_right</mat-icon>เพิ่มรายการย่อย</button>
+                }
+                <button mat-menu-item (click)="addSibling(i)"><mat-icon>add</mat-icon>เพิ่มแถวถัดไป</button>
+                @if (c?.leaf) {
+                  <button mat-menu-item (click)="pick(i, 'material')"><mat-icon>inventory_2</mat-icon>เลือกวัสดุจากฐานราคา</button>
+                  <button mat-menu-item (click)="pick(i, 'labor')"><mat-icon>engineering</mat-icon>เลือกค่าแรงจากฐานราคา</button>
+                  <button mat-menu-item (click)="pick(i, 'equipment')"><mat-icon>construction</mat-icon>เลือกเครื่องจักรจากฐานราคา</button>
+                  @if (linked(r)) {
+                    <button mat-menu-item (click)="unlink(i)"><mat-icon>link_off</mat-icon>ยกเลิกการผูกฐานราคา</button>
+                  }
+                }
+                <button mat-menu-item (click)="move(i, -1)"><mat-icon>arrow_upward</mat-icon>เลื่อนขึ้น</button>
+                <button mat-menu-item (click)="move(i, 1)"><mat-icon>arrow_downward</mat-icon>เลื่อนลง</button>
+                <button mat-menu-item (click)="indent(i)"><mat-icon>format_indent_increase</mat-icon>ย่อหน้า (เป็นรายการย่อย)</button>
+                @if (r.parentKey) {
+                  <button mat-menu-item (click)="outdent(i)"><mat-icon>format_indent_decrease</mat-icon>ถอยย่อหน้า</button>
+                }
+                <button mat-menu-item (click)="remove(i)"><mat-icon>delete</mat-icon>ลบแถว{{ c?.leaf ? '' : 'และรายการย่อย' }}</button>
+              </mat-menu>
+            }
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td [attr.colspan]="colCount()" class="empty muted">
+            ยังไม่มีรายการ เริ่มจากเพิ่มหมวดงาน เช่น "งานฐานราก" แล้วเพิ่มรายการย่อยใต้หมวด
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+@if (editable()) {
+  <button mat-stroked-button type="button" class="add-root" (click)="addRoot()"><mat-icon>add</mat-icon> เพิ่มหมวดงาน</button>
+}
