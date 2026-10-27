@@ -1,0 +1,245 @@
+@use '@angular/material' as mat;
+@use './styles/theme-colors' as brand;
+
+/*
+ * KTT design tokens
+ * หมึกพิมพ์เขียว (ink)  #1E3A4C  : แถบนำทาง หัวข้อ ปุ่มรอง
+ * ปูนเย็น (concrete)    #EEF0EE  : พื้นหลังแอป
+ * กระดาษ (paper)       #FFFFFF  : พื้นที่ทำงาน ตาราง ฟอร์ม
+ * ส้มเซฟตี้ (safety)    #E8730C  : ใช้เฉพาะปุ่มหลักและสิ่งที่ต้องสนใจ
+ * เหล็ก (steel)        #5B6770  : ข้อความรอง
+ */
+:root {
+  --ktt-ink: #1e3a4c;
+  --ktt-ink-2: #2b4b60;
+  --ktt-concrete: #eef0ee;
+  --ktt-paper: #ffffff;
+  --ktt-line: #d9dddb;
+  --ktt-text: #1a2328;
+  --ktt-steel: #5b6770;
+  --ktt-safety: #e8730c;
+  --ktt-safety-ink: #ffffff;
+  --ktt-ok: #2f7d4f;
+  --ktt-danger: #b3261e;
+  --ktt-radius-s: 4px;
+  --ktt-radius-m: 8px;
+
+  color-scheme: light;
+}
+
+html {
+  @include mat.theme((
+    color: (
+      theme-type: light,
+      primary: brand.$primary-palette,
+      tertiary: brand.$tertiary-palette,
+    ),
+    typography: (
+      plain-family: 'IBM Plex Sans Thai, system-ui, sans-serif',
+      brand-family: 'IBM Plex Sans Thai, system-ui, sans-serif',
+    ),
+    density: -1,
+  ));
+
+  // ปรับ token ของ Material ให้เข้ากับแบรนด์
+  @include mat.button-overrides((
+    filled-container-shape: var(--ktt-radius-s),
+    outlined-container-shape: var(--ktt-radius-s),
+    text-container-shape: var(--ktt-radius-s),
+    protected-container-shape: var(--ktt-radius-s),
+  ));
+  @include mat.form-field-overrides((
+    subscript-text-line-height: 18px,
+    subscript-text-size: 12.5px,
+  ));
+  @include mat.sidenav-overrides((
+    container-shape: 0,
+  ));
+  @include mat.table-overrides((
+    background-color: var(--ktt-paper),
+  ));
+  @include mat.paginator-overrides((
+    container-background-color: var(--ktt-paper),
+  ));
+  @include mat.dialog-overrides((
+    container-shape: var(--ktt-radius-m),
+  ));
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ktt-concrete);
+  color: var(--ktt-text);
+  font-family: 'IBM Plex Sans Thai', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--ktt-ink-2);
+}
+
+h1, h2, h3 {
+  margin: 0;
+  color: var(--ktt-ink);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 1rem; }
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ตัวเลขเงิน/จำนวนต้องเรียงตรงหลัก */
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--ktt-steel);
+}
+
+/* ปุ่มหลัก (สีส้มเซฟตี้) ใช้หน้าละไม่เกิน 1 ปุ่ม */
+.btn-primary.mat-mdc-unelevated-button:not(:disabled) {
+  --mat-button-filled-container-color: var(--ktt-safety);
+  --mat-button-filled-label-text-color: var(--ktt-safety-ink);
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 24px 48px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+
+  p {
+    margin: 4px 0 0;
+    color: var(--ktt-steel);
+  }
+}
+
+.panel {
+  background: var(--ktt-paper);
+  border: 1px solid var(--ktt-line);
+  border-radius: var(--ktt-radius-m);
+}
+
+.panel-pad {
+  padding: 20px 24px;
+}
+
+.form-grid + .form-grid {
+  margin-top: 10px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  column-gap: 16px;
+  row-gap: 6px;
+  align-items: start;
+
+  .span-2 { grid-column: span 2; }
+  .span-all { grid-column: 1 / -1; }
+
+  @media (max-width: 600px) {
+    .span-2 { grid-column: 1 / -1; }
+  }
+}
+
+.data-table {
+  width: 100%;
+
+  th.mat-mdc-header-cell {
+    color: var(--ktt-steel);
+    font-weight: 500;
+    background: #f6f7f6;
+  }
+
+  tr.clickable {
+    cursor: pointer;
+
+    &:hover td { background: #f3f6f8; }
+    &:focus-visible { outline: 2px solid var(--ktt-ink-2); outline-offset: -2px; }
+  }
+}
+
+.table-scroll {
+  overflow-x: auto;
+
+  .data-table {
+    min-width: 760px;
+  }
+}
+
+/* แถบตัวกรองเหนือตาราง: มือถือให้เต็มความกว้าง */
+@media (max-width: 600px) {
+  .filters .mat-mdc-form-field {
+    width: 100% !important;
+  }
+}
+
+.empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--ktt-steel);
+
+  p { margin: 0 0 16px; }
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  background: #e8ecee;
+  color: var(--ktt-ink);
+  white-space: nowrap;
+
+  &.ok { background: #e3f1e8; color: var(--ktt-ok); }
+  &.warn { background: #fdeedd; color: #9a4b05; }
+  &.danger { background: #fbe4e2; color: var(--ktt-danger); }
+}
+
+.mono-code {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+:focus-visible {
+  outline-color: var(--ktt-ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

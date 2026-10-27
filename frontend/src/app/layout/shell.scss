@@ -1,0 +1,174 @@
+.shell {
+  height: 100vh;
+  background: var(--ktt-concrete);
+}
+
+.sidebar {
+  width: 248px;
+  background: var(--ktt-ink);
+  color: #dbe4ea;
+  border-right: none;
+  padding: 0 12px 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 8px 24px;
+  color: #fff;
+  text-decoration: none;
+
+  strong {
+    display: block;
+    font-size: 1.15rem;
+    letter-spacing: 0.06em;
+  }
+
+  small {
+    display: block;
+    color: #9fb3c2;
+    font-size: 0.8rem;
+  }
+}
+
+/* เครื่องหมายแบรนด์: มุมฉากแบบเส้นบอกระยะในแบบก่อสร้าง */
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-left: 3px solid var(--ktt-safety);
+  border-bottom: 3px solid var(--ktt-safety);
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 12px;
+    height: 12px;
+    border-right: 3px solid #fff;
+    border-top: 3px solid #fff;
+  }
+}
+
+.nav-group {
+  margin: 20px 12px 6px;
+  font-size: 0.8rem;
+  color: #8aa0b0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  margin-bottom: 2px;
+  border-radius: var(--ktt-radius-s);
+  color: #dbe4ea;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    color: #9fb3c2;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: -2px;
+  }
+
+  &.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-left-color: var(--ktt-safety);
+    color: #fff;
+
+    mat-icon {
+      color: #fff;
+    }
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 60px;
+  padding: 0 16px 0 8px;
+  background: var(--ktt-paper);
+  border-bottom: 1px solid var(--ktt-line);
+}
+
+.grow {
+  flex: 1;
+}
+
+.user-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 4px 4px;
+  border: 0;
+  border-radius: var(--ktt-radius-m);
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: #f1f3f2;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ktt-ink-2);
+  }
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--ktt-ink);
+  color: #fff;
+  font-weight: 600;
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.user-name {
+  font-weight: 500;
+}
+
+.user-role {
+  font-size: 0.8rem;
+  color: var(--ktt-steel);
+}
+
+@media (max-width: 600px) {
+  .user-meta {
+    display: none;
+  }
+}

@@ -1,0 +1,154 @@
+<div class="page narrow">
+  <a routerLink="/customers" class="back"><mat-icon>arrow_back</mat-icon> ลูกค้าทั้งหมด</a>
+
+  <div class="page-head">
+    <div>
+      <h1>{{ isNew() ? 'เพิ่มลูกค้า' : customer()?.name }}</h1>
+      @if (customer(); as c) {
+        <p>เพิ่มเมื่อ {{ c.createdAt | thDate }}, แก้ไขล่าสุด {{ c.updatedAt | thDate: true }}</p>
+      }
+    </div>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+    <section class="panel panel-pad section">
+      <h2>ข้อมูลลูกค้า</h2>
+
+      <mat-button-toggle-group formControlName="type" aria-label="ประเภทลูกค้า" class="type-toggle">
+        <mat-button-toggle value="person">บุคคลธรรมดา</mat-button-toggle>
+        <mat-button-toggle value="company">นิติบุคคล</mat-button-toggle>
+      </mat-button-toggle-group>
+
+      <div class="form-grid">
+        <mat-form-field class="span-2">
+          <mat-label>{{ form.controls.type.value === 'company' ? 'ชื่อบริษัท/ห้างร้าน' : 'ชื่อ-นามสกุล' }}</mat-label>
+          <input matInput formControlName="name" />
+          @if (form.controls.name.hasError('required')) {
+            <mat-error>กรุณากรอกชื่อลูกค้า</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>{{ form.controls.type.value === 'company' ? 'เลขประจำตัวผู้เสียภาษี' : 'เลขบัตรประชาชน' }}</mat-label>
+          <input matInput formControlName="taxId" inputmode="numeric" maxlength="17" />
+          <mat-hint>13 หลัก ใช้ออกใบกำกับภาษี</mat-hint>
+          @if (form.controls.taxId.hasError('taxId')) {
+            <mat-error>เลขไม่ถูกต้อง ตรวจสอบอีกครั้ง</mat-error>
+          }
+        </mat-form-field>
+
+        @if (form.controls.type.value === 'company') {
+          <mat-form-field>
+            <mat-label>สาขา</mat-label>
+            <input matInput formControlName="branchNo" inputmode="numeric" maxlength="5" />
+            <mat-hint>00000 = สำนักงานใหญ่</mat-hint>
+            @if (form.controls.branchNo.invalid) {
+              <mat-error>ตัวเลข 5 หลัก</mat-error>
+            }
+          </mat-form-field>
+        }
+      </div>
+
+      @if (duplicateOf(); as dupId) {
+        <p class="dup">
+          เลขผู้เสียภาษีนี้มีอยู่แล้ว <a [routerLink]="['/customers', dupId]">เปิดลูกค้ารายนั้น</a>
+        </p>
+      }
+
+      <div class="form-grid">
+        <mat-form-field class="span-all">
+          <mat-label>ที่อยู่ออกใบกำกับภาษี</mat-label>
+          <textarea matInput formControlName="billingAddress" rows="3"></textarea>
+        </mat-form-field>
+      </div>
+    </section>
+
+    <section class="panel panel-pad section">
+      <h2>ช่องทางติดต่อ</h2>
+      <div class="form-grid">
+        <mat-form-field>
+          <mat-label>โทรศัพท์</mat-label>
+          <input matInput formControlName="phone" inputmode="tel" />
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>อีเมล</mat-label>
+          <input matInput formControlName="email" type="email" />
+          @if (form.controls.email.hasError('email')) {
+            <mat-error>รูปแบบอีเมลไม่ถูกต้อง</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>LINE ID</mat-label>
+          <input matInput formControlName="lineId" />
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>รู้จักเราจาก</mat-label>
+          <mat-select formControlName="source">
+            @for (s of sources; track s[0]) {
+              <mat-option [value]="s[0]">{{ s[1] }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field class="span-all">
+          <mat-label>หมายเหตุ</mat-label>
+          <textarea matInput formControlName="note" rows="2"></textarea>
+        </mat-form-field>
+      </div>
+      <mat-checkbox formControlName="pdpaConsent">
+        ลูกค้ายินยอมให้เก็บและใช้ข้อมูลส่วนบุคคลเพื่อการเสนอราคาและติดต่องาน (PDPA)
+      </mat-checkbox>
+    </section>
+
+    <section class="panel panel-pad section">
+      <div class="section-head">
+        <h2>ผู้ติดต่อ</h2>
+        @if (canWrite()) {
+          <button mat-stroked-button type="button" (click)="addContact()"><mat-icon>person_add</mat-icon> เพิ่มผู้ติดต่อ</button>
+        }
+      </div>
+      @if (contacts.length === 0) {
+        <p class="muted">ยังไม่มีผู้ติดต่อ ใช้กรณีลูกค้าเป็นบริษัทและมีผู้ประสานงานหลายคน</p>
+      }
+      <div formArrayName="contacts">
+        @for (c of contacts.controls; track c; let i = $index) {
+          <div class="contact-row" [formGroupName]="i">
+            <mat-form-field>
+              <mat-label>ชื่อ</mat-label>
+              <input matInput formControlName="name" />
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>ตำแหน่ง</mat-label>
+              <input matInput formControlName="position" />
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>โทรศัพท์</mat-label>
+              <input matInput formControlName="phone" inputmode="tel" />
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>อีเมล</mat-label>
+              <input matInput formControlName="email" type="email" />
+            </mat-form-field>
+            @if (canWrite()) {
+              <button mat-icon-button type="button" (click)="removeContact(i)" aria-label="ลบผู้ติดต่อ">
+                <mat-icon>close</mat-icon>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+    @if (canWrite()) {
+      <div class="footer-actions">
+        @if (!isNew() && canDelete()) {
+          <button mat-button type="button" class="danger-text" (click)="remove()">ลบลูกค้า</button>
+        }
+        <span class="grow"></span>
+        <a mat-button routerLink="/customers">ยกเลิก</a>
+        <button mat-flat-button class="btn-primary" type="submit" [disabled]="busy()">
+          {{ isNew() ? 'เพิ่มลูกค้า' : 'บันทึก' }}
+        </button>
+      </div>
+    }
+  </form>
+</div>

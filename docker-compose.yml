@@ -1,0 +1,26 @@
+# สำหรับพัฒนาในเครื่อง: PostgreSQL + Mailpit (ดูอีเมลที่ระบบส่งที่ http://localhost:8025)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ktt
+      POSTGRES_USER: ktt
+      POSTGRES_PASSWORD: ktt
+      TZ: Asia/Bangkok
+    ports:
+      - "5432:5432"
+    volumes:
+      - ktt-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ktt"]
+      interval: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes:
+  ktt-pg:

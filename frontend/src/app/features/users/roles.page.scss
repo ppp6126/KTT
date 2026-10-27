@@ -1,0 +1,85 @@
+.layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.role-list {
+  padding: 6px;
+}
+
+.role-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: var(--ktt-radius-s);
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: #f3f5f4;
+  }
+
+  &.active {
+    background: #e8eff4;
+    border-left-color: var(--ktt-ink);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ktt-ink-2);
+  }
+}
+
+.role-name {
+  font-weight: 500;
+}
+
+.small {
+  font-size: 0.82rem;
+}
+
+.matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 8px 0 20px;
+
+  fieldset {
+    margin: 0;
+    padding: 8px 12px 10px;
+    border: 1px solid var(--ktt-line);
+    border-radius: var(--ktt-radius-s);
+    display: flex;
+    flex-direction: column;
+  }
+
+  legend {
+    padding: 0 6px;
+    font-weight: 600;
+    color: var(--ktt-ink);
+  }
+}
+
+.owner-note {
+  padding: 10px 14px;
+  background: #e8eff4;
+  border-left: 3px solid var(--ktt-ink);
+  border-radius: var(--ktt-radius-s);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}

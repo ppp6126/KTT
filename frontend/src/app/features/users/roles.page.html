@@ -1,0 +1,72 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>บทบาทและสิทธิ์</h1>
+      <p>กำหนดว่าแต่ละบทบาททำอะไรได้บ้าง ผู้ใช้หนึ่งคนมีหนึ่งบทบาท</p>
+    </div>
+    <button mat-stroked-button (click)="newRole()"><mat-icon>add</mat-icon> เพิ่มบทบาท</button>
+  </div>
+
+  <div class="layout">
+    <nav class="panel role-list" aria-label="รายการบทบาท">
+      @for (r of roles(); track r.id) {
+        <button type="button" class="role-item" [class.active]="draft()?.id === r.id" (click)="select(r)">
+          <span class="role-name">{{ r.name }}</span>
+          <span class="muted small">{{ r.userCount }} คน</span>
+        </button>
+      }
+    </nav>
+
+    @if (draft(); as d) {
+      <section class="panel panel-pad editor">
+        <div class="form-grid">
+          <mat-form-field>
+            <mat-label>ชื่อบทบาท</mat-label>
+            <input matInput [ngModel]="d.name" (ngModelChange)="updateField('name', $event)" [disabled]="isOwner()" />
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>รหัส (ภาษาอังกฤษ)</mat-label>
+            <input matInput [ngModel]="d.code" (ngModelChange)="updateField('code', $event)" [disabled]="d.system" />
+            @if (d.system) {
+              <mat-hint>บทบาทตั้งต้นของระบบ เปลี่ยนรหัสไม่ได้</mat-hint>
+            }
+          </mat-form-field>
+          <mat-form-field class="span-all">
+            <mat-label>คำอธิบาย</mat-label>
+            <input matInput [ngModel]="d.description" (ngModelChange)="updateField('description', $event)" [disabled]="isOwner()" />
+          </mat-form-field>
+        </div>
+
+        @if (isOwner()) {
+          <p class="owner-note">เจ้าของ/ผู้บริหารมีทุกสิทธิ์เสมอ รวมถึงสิทธิ์ที่เพิ่มในอนาคต</p>
+        }
+
+        <div class="matrix">
+          @for (g of groups(); track g.module) {
+            <fieldset>
+              <legend>{{ g.label }}</legend>
+              @for (p of g.perms; track p.code) {
+                <mat-checkbox
+                  [checked]="isOwner() || d.permissions.has(p.code)"
+                  [disabled]="isOwner()"
+                  (change)="toggle(p.code, $event.checked)"
+                >
+                  {{ p.description }}
+                </mat-checkbox>
+              }
+            </fieldset>
+          }
+        </div>
+
+        @if (!isOwner()) {
+          <div class="actions">
+            <button mat-flat-button class="btn-primary" (click)="save()" [disabled]="busy()">บันทึกบทบาท</button>
+            @if (d.id && !d.system) {
+              <button mat-button (click)="remove()">ลบบทบาท</button>
+            }
+          </div>
+        }
+      </section>
+    }
+  </div>
+</div>

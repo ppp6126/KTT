@@ -1,0 +1,116 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>ผู้ใช้งาน</h1>
+      <p>พนักงานที่เข้าใช้ระบบได้ และบทบาทของแต่ละคน</p>
+    </div>
+    <button *appCan="Perm.USER_MANAGE" mat-flat-button class="btn-primary" (click)="openDialog(null)">
+      <mat-icon>person_add</mat-icon> เพิ่มผู้ใช้
+    </button>
+  </div>
+
+  <div class="panel">
+    <div class="filters">
+      <mat-form-field class="search">
+        <mat-label>ค้นหาชื่อหรืออีเมล</mat-label>
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput [(ngModel)]="q" (ngModelChange)="onSearch()" />
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>บทบาท</mat-label>
+        <mat-select [(ngModel)]="roleId" (selectionChange)="page = 0; load()">
+          <mat-option value="">ทั้งหมด</mat-option>
+          @for (r of roles(); track r.id) {
+            <mat-option [value]="r.id">{{ r.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>สถานะ</mat-label>
+        <mat-select [(ngModel)]="active" (selectionChange)="page = 0; load()">
+          <mat-option [value]="null">ทั้งหมด</mat-option>
+          <mat-option [value]="true">ใช้งานอยู่</mat-option>
+          <mat-option [value]="false">ปิดใช้งาน</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <div class="table-scroll">
+      <table mat-table [dataSource]="rows()" class="data-table">
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>ชื่อ</th>
+          <td mat-cell *matCellDef="let u">
+            <div class="name">{{ u.name }}</div>
+            <div class="muted">{{ u.email }}</div>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="role">
+          <th mat-header-cell *matHeaderCellDef>บทบาท</th>
+          <td mat-cell *matCellDef="let u">{{ u.roleName }}</td>
+        </ng-container>
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>สถานะ</th>
+          <td mat-cell *matCellDef="let u">
+            <div class="flags">
+              @if (!u.active) {
+                <span class="chip">ปิดใช้งาน</span>
+              } @else if (u.locked) {
+                <span class="chip danger">ถูกล็อก</span>
+              } @else if (u.mustChangePassword) {
+                <span class="chip warn">รอตั้งรหัสผ่าน</span>
+              } @else {
+                <span class="chip ok">ใช้งานอยู่</span>
+              }
+              @if (u.mfaEnabled) {
+                <span class="chip">2FA</span>
+              }
+            </div>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="lastLogin">
+          <th mat-header-cell *matHeaderCellDef>เข้าสู่ระบบล่าสุด</th>
+          <td mat-cell *matCellDef="let u">{{ u.lastLoginAt | thDate: true }}</td>
+        </ng-container>
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef><span class="sr-only">จัดการ</span></th>
+          <td mat-cell *matCellDef="let u" class="num">
+            @if (auth.can(Perm.USER_MANAGE)) {
+              <button mat-icon-button [matMenuTriggerFor]="menu" [attr.aria-label]="'จัดการ ' + u.name">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #menu="matMenu" xPosition="before">
+                <button mat-menu-item (click)="openDialog(u)"><mat-icon>edit</mat-icon>แก้ไข</button>
+                <button mat-menu-item (click)="resetPassword(u)"><mat-icon>password</mat-icon>รีเซ็ตรหัสผ่าน</button>
+                @if (u.locked) {
+                  <button mat-menu-item (click)="unlock(u)"><mat-icon>lock_open</mat-icon>ปลดล็อกบัญชี</button>
+                }
+                @if (u.mfaEnabled) {
+                  <button mat-menu-item (click)="resetMfa(u)"><mat-icon>phonelink_erase</mat-icon>รีเซ็ต 2FA</button>
+                }
+                <button mat-menu-item (click)="revokeSessions(u)"><mat-icon>logout</mat-icon>ออกจากระบบทุกอุปกรณ์</button>
+                @if (u.id !== auth.user()?.id) {
+                  <button mat-menu-item (click)="remove(u)"><mat-icon>delete</mat-icon>ลบผู้ใช้</button>
+                }
+              </mat-menu>
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columns"></tr>
+        <tr mat-row *matRowDef="let row; columns: columns"></tr>
+      </table>
+    </div>
+
+    @if (!loading() && rows().length === 0) {
+      <div class="empty-state"><p>ไม่พบผู้ใช้ตามเงื่อนไขที่ค้นหา</p></div>
+    }
+
+    <mat-paginator
+      [length]="total()"
+      [pageIndex]="page"
+      [pageSize]="size"
+      [pageSizeOptions]="[20, 50, 100]"
+      (page)="onPage($event)"
+    />
+  </div>
+</div>

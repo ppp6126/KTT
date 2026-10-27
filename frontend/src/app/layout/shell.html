@@ -1,0 +1,72 @@
+<mat-sidenav-container class="shell">
+  <mat-sidenav
+    #drawer
+    class="sidebar"
+    [mode]="isNarrow() ? 'over' : 'side'"
+    [opened]="!isNarrow()"
+    [fixedInViewport]="isNarrow()"
+  >
+    <a routerLink="/" class="brand" (click)="isNarrow() && drawer.close()">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">
+        <strong>KTT</strong>
+        <small>ระบบหลังบ้าน</small>
+      </span>
+    </a>
+
+    <nav aria-label="เมนูหลัก">
+      @for (group of nav(); track group.label) {
+        @if (group.label) {
+          <div class="nav-group">{{ group.label }}</div>
+        }
+        @for (item of group.items; track item.link) {
+          <a
+            class="nav-item"
+            [routerLink]="item.link"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: !!item.exact }"
+            (click)="isNarrow() && drawer.close()"
+          >
+            <mat-icon>{{ item.icon }}</mat-icon>
+            <span>{{ item.label }}</span>
+          </a>
+        }
+      }
+    </nav>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="main">
+    <header class="topbar">
+      @if (isNarrow()) {
+        <button mat-icon-button (click)="drawer.toggle()" aria-label="เปิดเมนู">
+          <mat-icon>menu</mat-icon>
+        </button>
+      }
+      <span class="grow"></span>
+      @if (auth.user(); as u) {
+        <button class="user-btn" [matMenuTriggerFor]="userMenu" aria-label="เมนูผู้ใช้">
+          <span class="avatar" aria-hidden="true">{{ initials() }}</span>
+          <span class="user-meta">
+            <span class="user-name">{{ u.name }}</span>
+            <span class="user-role">{{ u.role.name }}</span>
+          </span>
+          <mat-icon>expand_more</mat-icon>
+        </button>
+        <mat-menu #userMenu="matMenu" xPosition="before">
+          <a mat-menu-item routerLink="/account">
+            <mat-icon>manage_accounts</mat-icon>
+            <span>บัญชีของฉัน</span>
+          </a>
+          <button mat-menu-item (click)="logout()">
+            <mat-icon>logout</mat-icon>
+            <span>ออกจากระบบ</span>
+          </button>
+        </mat-menu>
+      }
+    </header>
+
+    <main>
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

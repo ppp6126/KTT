@@ -1,0 +1,90 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>ลูกค้า</h1>
+      <p>ข้อมูลลูกค้าและที่อยู่ออกใบกำกับภาษี ใช้ซ้ำในใบเสนอราคาทุกใบ</p>
+    </div>
+    <a *appCan="Perm.CUSTOMER_WRITE" mat-flat-button class="btn-primary" routerLink="/customers/new">
+      <mat-icon>add</mat-icon> เพิ่มลูกค้า
+    </a>
+  </div>
+
+  <div class="panel">
+    <div class="filters">
+      <mat-form-field class="search">
+        <mat-label>ค้นหาชื่อ เลขผู้เสียภาษี โทรศัพท์ หรืออีเมล</mat-label>
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput [(ngModel)]="q" (ngModelChange)="onSearch()" />
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>ประเภท</mat-label>
+        <mat-select [(ngModel)]="type" (selectionChange)="page = 0; load()">
+          <mat-option value="">ทั้งหมด</mat-option>
+          <mat-option value="person">บุคคลธรรมดา</mat-option>
+          <mat-option value="company">นิติบุคคล</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>แหล่งที่มา</mat-label>
+        <mat-select [(ngModel)]="source" (selectionChange)="page = 0; load()">
+          <mat-option value="">ทั้งหมด</mat-option>
+          @for (s of sources; track s[0]) {
+            <mat-option [value]="s[0]">{{ s[1] }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <div class="table-scroll">
+      <table mat-table [dataSource]="rows()" matSort [matSortActive]="sort" [matSortDirection]="dir" (matSortChange)="onSort($event)" class="data-table">
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>ชื่อลูกค้า</th>
+          <td mat-cell *matCellDef="let c">
+            <a class="name" [routerLink]="['/customers', c.id]" (click)="$event.stopPropagation()">{{ c.name }}</a>
+            <div class="muted">
+              {{ typeLabel[c.type] }}
+              @if (c.type === 'company' && c.branchNo) {
+                ({{ c.branchNo === '00000' ? 'สำนักงานใหญ่' : 'สาขา ' + c.branchNo }})
+              }
+            </div>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="taxId">
+          <th mat-header-cell *matHeaderCellDef>เลขผู้เสียภาษี</th>
+          <td mat-cell *matCellDef="let c" class="num" style="text-align: left">{{ c.taxId | taxId }}</td>
+        </ng-container>
+        <ng-container matColumnDef="contact">
+          <th mat-header-cell *matHeaderCellDef>ติดต่อ</th>
+          <td mat-cell *matCellDef="let c">
+            <div>{{ c.phone || '–' }}</div>
+            <div class="muted">{{ c.email }}</div>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="source">
+          <th mat-header-cell *matHeaderCellDef>แหล่งที่มา</th>
+          <td mat-cell *matCellDef="let c">{{ sourceLabel[c.source] }}</td>
+        </ng-container>
+        <ng-container matColumnDef="createdAt">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>วันที่เพิ่ม</th>
+          <td mat-cell *matCellDef="let c">{{ c.createdAt | thDate }}</td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columns"></tr>
+        <tr mat-row *matRowDef="let row; columns: columns" class="clickable" (click)="open(row)"></tr>
+      </table>
+    </div>
+
+    @if (!loading() && rows().length === 0) {
+      <div class="empty-state">
+        @if (hasFilter) {
+          <p>ไม่พบลูกค้าตามที่ค้นหา ลองใช้คำค้นที่สั้นลง</p>
+        } @else {
+          <p>ยังไม่มีลูกค้าในระบบ เริ่มจากเพิ่มลูกค้ารายแรก</p>
+          <a *appCan="Perm.CUSTOMER_WRITE" mat-stroked-button routerLink="/customers/new">เพิ่มลูกค้า</a>
+        }
+      </div>
+    }
+
+    <mat-paginator [length]="total()" [pageIndex]="page" [pageSize]="size" [pageSizeOptions]="[20, 50, 100]" (page)="onPage($event)" />
+  </div>
+</div>

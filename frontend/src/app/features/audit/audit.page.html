@@ -1,0 +1,87 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>ประวัติการใช้งาน</h1>
+      <p>ทุกการสร้าง แก้ไข ลบ และการเข้าสู่ระบบ บันทึกไว้แก้ไขไม่ได้</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="filters">
+      <mat-form-field>
+        <mat-label>ประเภทข้อมูล</mat-label>
+        <mat-select [(ngModel)]="entityType" (selectionChange)="applyFilters()">
+          <mat-option value="">ทั้งหมด</mat-option>
+          @for (e of entities; track e[0]) {
+            <mat-option [value]="e[0]">{{ e[1] }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>การกระทำ</mat-label>
+        <mat-select [(ngModel)]="action" (selectionChange)="applyFilters()">
+          <mat-option value="">ทั้งหมด</mat-option>
+          @for (a of actions; track a[0]) {
+            <mat-option [value]="a[0]">{{ a[1] }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>ตั้งแต่วันที่</mat-label>
+        <input matInput type="date" [(ngModel)]="from" (change)="applyFilters()" />
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>ถึงวันที่</mat-label>
+        <input matInput type="date" [(ngModel)]="to" (change)="applyFilters()" />
+      </mat-form-field>
+    </div>
+
+    <ol class="log">
+      @for (r of rows(); track r.id) {
+        <li>
+          <button type="button" class="entry" (click)="toggle(r.id)" [attr.aria-expanded]="expanded() === r.id">
+            <span class="time num">{{ r.createdAt | thDate: true }}</span>
+            <span class="who">{{ r.userName || r.userEmail || 'ระบบ' }}</span>
+            <span class="what">
+              <span class="chip" [class.danger]="r.action === 'login_failed' || r.action === 'locked' || r.action === 'delete'">
+                {{ actionLabel[r.action] || r.action }}
+              </span>
+              {{ entityLabel[r.entityType] || r.entityType }}
+            </span>
+            <mat-icon class="caret">{{ expanded() === r.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </button>
+          @if (expanded() === r.id) {
+            <div class="detail">
+              @if (changes(r).length) {
+                <table class="diff">
+                  <thead>
+                    <tr><th>ข้อมูล</th><th>ก่อน</th><th>หลัง</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (c of changes(r); track c.field) {
+                      <tr>
+                        <td>{{ c.field }}</td>
+                        <td class="old">{{ c.before }}</td>
+                        <td>{{ c.after }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+              <p class="muted meta">
+                IP {{ r.ip || '–' }}, {{ describeUa(r.userAgent) }}
+                @if (r.entityId) {
+                  , รหัสรายการ {{ r.entityId }}
+                }
+              </p>
+            </div>
+          }
+        </li>
+      } @empty {
+        <li class="empty-state"><p>ไม่พบประวัติตามเงื่อนไขที่เลือก</p></li>
+      }
+    </ol>
+
+    <mat-paginator [length]="total()" [pageIndex]="page" [pageSize]="size" [pageSizeOptions]="[50, 100, 200]" (page)="onPage($event)" />
+  </div>
+</div>
