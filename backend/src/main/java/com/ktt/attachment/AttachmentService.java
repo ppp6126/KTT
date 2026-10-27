@@ -21,7 +21,8 @@ import java.util.UUID;
 public class AttachmentService {
 
     public static final Set<String> CATEGORIES = Set.of(
-            "plan", "site_photo", "deed", "permit", "contract", "invoice", "receipt", "certificate", "other");
+            "plan", "site_photo", "deed", "permit", "contract", "invoice", "receipt", "certificate",
+            "drawing", "report", "correspondence", "before", "after", "other");
     public static final long MAX_BYTES = 50L * 1024 * 1024;
 
     @Inject

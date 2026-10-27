@@ -7,6 +7,9 @@ import { ThDatePipe } from '../../core/util/format';
 import { MoneyPipe } from '../../core/util/money';
 import { Notify } from '../../shared/notify.service';
 import { prompt } from '../../shared/prompt-dialog';
+import { Perm } from '../../core/auth/auth.models';
+import { AuthService } from '../../core/auth/auth.service';
+import { ContractsApi, VoRow } from '../contracts/contracts.api';
 import { PendingApproval, QuotationsApi } from '../quotations/quotations.api';
 
 /** US-15 ผู้บริหารอนุมัติใบเสนอราคาที่ส่วนลดเกินเกณฑ์ */
@@ -18,7 +21,7 @@ import { PendingApproval, QuotationsApi } from '../quotations/quotations.api';
       <div class="page-head">
         <div>
           <h1>รออนุมัติ</h1>
-          <p>ใบเสนอราคาที่ให้ส่วนลดเกินเกณฑ์ ต้องอนุมัติก่อนฝ่ายขายส่งให้ลูกค้า</p>
+          <p>ใบเสนอราคาที่ให้ส่วนลดเกินเกณฑ์ และงานเพิ่ม-ลด (VO) ที่ต้องอนุมัติ</p>
         </div>
       </div>
       <div class="list">
@@ -42,7 +45,23 @@ import { PendingApproval, QuotationsApi } from '../quotations/quotations.api';
               <button mat-stroked-button (click)="decide(a, false)">ไม่อนุมัติ</button>
             </div>
           </article>
-        } @empty {
+        }
+        @for (v of vos(); track v.id) {
+          <article class="panel card">
+            <div class="main">
+              <a class="no" [routerLink]="['/change-orders', v.id]">{{ v.docNo }}</a>
+              <div>งานเพิ่ม-ลด: {{ v.title }}</div>
+              <div class="muted small">วันที่ {{ v.issueDate | thDate }}{{ v.daysExtension ? ', ขยายเวลา ' + v.daysExtension + ' วัน' : '' }}</div>
+            </div>
+            <div class="figures">
+              <div><span class="label">มูลค่า (ก่อน VAT)</span><b [class.low]="v.amount < 0">{{ v.amount | money }}</b></div>
+            </div>
+            <div class="actions">
+              <a mat-stroked-button [routerLink]="['/change-orders', v.id]">เปิดดูและอนุมัติ</a>
+            </div>
+          </article>
+        }
+        @if (!items().length && !vos().length) {
           <div class="panel empty-state"><p>ไม่มีรายการรออนุมัติ</p></div>
         }
       </div>
@@ -66,13 +85,20 @@ export class ApprovalsPage implements OnInit {
   private readonly api = inject(QuotationsApi);
   private readonly dialog = inject(MatDialog);
   private readonly notify = inject(Notify);
+  private readonly contracts = inject(ContractsApi);
+  private readonly auth = inject(AuthService);
   readonly items = signal<PendingApproval[]>([]);
+  readonly vos = signal<VoRow[]>([]);
 
   ngOnInit(): void {
     this.load();
+    if (this.auth.can(Perm.CONTRACT_APPROVE)) {
+      this.contracts.pendingVo().subscribe({ next: (r) => this.vos.set(r), error: (e) => this.notify.error(e) });
+    }
   }
 
   load(): void {
+    if (!this.auth.can(Perm.QUOTATION_APPROVE)) return;
     this.api.pending().subscribe({ next: (r) => this.items.set(r), error: (e) => this.notify.error(e) });
   }
 

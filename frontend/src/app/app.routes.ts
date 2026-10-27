@@ -50,6 +50,25 @@ export const routes: Routes = [
     loadComponent: () => import('./features/print/gov-form.page').then((m) => m.GovFormPage),
   },
 
+  {
+    path: 'print/finance/:id',
+    canActivate: [authGuard, permissionGuard(Perm.FINANCE_READ)],
+    title: 'พิมพ์เอกสาร | KTT',
+    loadComponent: () => import('./features/print/finance-print.page').then((m) => m.FinancePrintPage),
+  },
+  {
+    path: 'print/change-orders/:id',
+    canActivate: [authGuard, permissionGuard(Perm.CONTRACT_READ, Perm.FINANCE_READ)],
+    title: 'พิมพ์ใบงานเพิ่ม-ลด | KTT',
+    loadComponent: () => import('./features/print/vo-print.page').then((m) => m.VoPrintPage),
+  },
+  {
+    path: 'print/progress/:id',
+    canActivate: [authGuard, permissionGuard(Perm.PROJECT_READ, Perm.PROJECT_READ_ALL)],
+    title: 'รายงานความคืบหน้า | KTT',
+    loadComponent: () => import('./features/print/progress-print.page').then((m) => m.ProgressPrintPage),
+  },
+
   // ---------- แอปหลัก
   {
     path: '',
@@ -136,9 +155,75 @@ export const routes: Routes = [
       },
       {
         path: 'approvals',
-        canActivate: [permissionGuard(Perm.QUOTATION_APPROVE)],
+        canActivate: [permissionGuard(Perm.QUOTATION_APPROVE, Perm.CONTRACT_APPROVE)],
         title: 'รออนุมัติ | KTT',
         loadComponent: () => import('./features/approvals/approvals.page').then((m) => m.ApprovalsPage),
+      },
+      {
+        path: 'projects',
+        canActivate: [permissionGuard(Perm.PROJECT_READ, Perm.PROJECT_READ_ALL)],
+        title: 'โครงการ | KTT',
+        loadComponent: () => import('./features/projects/project-list.page').then((m) => m.ProjectListPage),
+      },
+      {
+        path: 'projects/:projectId/daily/new',
+        canActivate: [permissionGuard(Perm.SITE_REPORT, Perm.PROJECT_WRITE)],
+        title: 'รายงานประจำวัน | KTT',
+        loadComponent: () => import('./features/projects/daily-report.page').then((m) => m.DailyReportPage),
+      },
+      {
+        path: 'projects/:id',
+        canActivate: [permissionGuard(Perm.PROJECT_READ, Perm.PROJECT_READ_ALL)],
+        title: 'โครงการ | KTT',
+        loadComponent: () => import('./features/projects/project-detail.page').then((m) => m.ProjectDetailPage),
+      },
+      {
+        path: 'projects/:id/:tab',
+        canActivate: [permissionGuard(Perm.PROJECT_READ, Perm.PROJECT_READ_ALL)],
+        title: 'โครงการ | KTT',
+        loadComponent: () => import('./features/projects/project-detail.page').then((m) => m.ProjectDetailPage),
+      },
+      {
+        path: 'daily-reports/:reportId',
+        canActivate: [permissionGuard(Perm.PROJECT_READ, Perm.PROJECT_READ_ALL)],
+        title: 'รายงานประจำวัน | KTT',
+        loadComponent: () => import('./features/projects/daily-report.page').then((m) => m.DailyReportPage),
+      },
+      {
+        path: 'contracts',
+        canActivate: [permissionGuard(Perm.CONTRACT_READ, Perm.FINANCE_READ)],
+        title: 'สัญญา | KTT',
+        loadComponent: () => import('./features/contracts/contract-list.page').then((m) => m.ContractListPage),
+      },
+      {
+        path: 'contracts/:id',
+        canActivate: [permissionGuard(Perm.CONTRACT_READ, Perm.FINANCE_READ)],
+        title: 'สัญญา | KTT',
+        loadComponent: () => import('./features/contracts/contract.page').then((m) => m.ContractPage),
+      },
+      {
+        path: 'change-orders/:id',
+        canActivate: [permissionGuard(Perm.CONTRACT_READ, Perm.FINANCE_READ)],
+        title: 'งานเพิ่ม-ลด | KTT',
+        loadComponent: () => import('./features/contracts/change-order.page').then((m) => m.ChangeOrderPage),
+      },
+      {
+        path: 'finance/docs',
+        canActivate: [permissionGuard(Perm.FINANCE_READ)],
+        title: 'เอกสารการเงิน | KTT',
+        loadComponent: () => import('./features/finance/sales-docs.page').then((m) => m.SalesDocsPage),
+      },
+      {
+        path: 'finance/docs/:id',
+        canActivate: [permissionGuard(Perm.FINANCE_READ)],
+        title: 'เอกสารการเงิน | KTT',
+        loadComponent: () => import('./features/finance/sales-doc.page').then((m) => m.SalesDocPage),
+      },
+      {
+        path: 'finance/receivables',
+        canActivate: [permissionGuard(Perm.FINANCE_READ)],
+        title: 'ลูกหนี้คงค้าง | KTT',
+        loadComponent: () => import('./features/finance/receivables.page').then((m) => m.ReceivablesPage),
       },
       {
         path: 'settings',

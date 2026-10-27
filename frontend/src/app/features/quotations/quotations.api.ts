@@ -116,6 +116,7 @@ export interface Quotation {
   approvalThresholdPct: number;
   editable: boolean;
   latestRevision: boolean;
+  projectId: string | null;
 }
 
 export interface PendingApproval {

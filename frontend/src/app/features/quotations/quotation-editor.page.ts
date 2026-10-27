@@ -17,6 +17,7 @@ import { MoneyPipe } from '../../core/util/money';
 import { confirmAction } from '../../shared/confirm-dialog';
 import { Notify } from '../../shared/notify.service';
 import { prompt } from '../../shared/prompt-dialog';
+import { FromQuotationDialog } from '../contracts/contract-dialogs';
 import { calcQuotation } from './quotation-calc';
 import { QItem, QUOTATION_STATUS, Quotation, QuotationsApi, ROUNDING } from './quotations.api';
 
@@ -328,6 +329,24 @@ export class QuotationEditorPage implements OnInit {
 
   openRevision(id: string): void {
     this.router.navigate(['/quotations', id]).then(() => this.load(id));
+  }
+
+  /** แปลงใบเสนอราคาที่ลูกค้าอนุมัติเป็นโครงการ + สัญญา */
+  toContract(): void {
+    const q = this.q();
+    if (!q) return;
+    this.dialog
+      .open(FromQuotationDialog, {
+        data: { quotationId: q.id, displayNo: q.displayNo, title: q.title, baseAmount: q.totalAmount - q.vatAmount, durationDays: q.durationDays },
+        maxWidth: '96vw',
+      })
+      .afterClosed()
+      .subscribe((c) => {
+        if (c) {
+          this.notify.ok(`สร้างโครงการ ${c.projectCode} และสัญญา ${c.docNo} แล้ว`);
+          this.router.navigate(['/projects', c.projectId, 'contract']);
+        }
+      });
   }
 
   print(): void {

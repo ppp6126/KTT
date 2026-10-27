@@ -614,7 +614,15 @@ public class QuotationService {
                 x.scopeOut, x.notes, x.lostReason, x.sentAt, x.decidedAt,
                 userNames(java.util.Collections.singletonList(x.createdBy)).get(x.createdBy), x.createdAt, x.updatedAt,
                 itemDtos, info, x.discountPct.compareTo(BigDecimal.valueOf(threshold)) > 0, threshold, x.isEditable(),
-                maxRev == null || maxRev.intValue() == x.revision);
+                maxRev == null || maxRev.intValue() == x.revision, projectOf(x.id));
+    }
+
+    /** โครงการที่สร้างจากใบเสนอราคานี้ (ถ้ามี) */
+    private UUID projectOf(UUID quotationId) {
+        List<?> r = Quotation.getEntityManager()
+                .createNativeQuery("select id from projects where quotation_id = ?1 and deleted_at is null limit 1")
+                .setParameter(1, quotationId).getResultList();
+        return r.isEmpty() ? null : com.ktt.common.SqlValues.uuid(r.get(0));
     }
 
     private static void copyFields(Quotation s, Quotation x) {

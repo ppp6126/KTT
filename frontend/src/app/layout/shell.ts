@@ -44,6 +44,20 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    label: 'โครงการ',
+    items: [
+      { label: 'โครงการ', icon: 'construction', link: '/projects', perm: Perm.PROJECT_READ },
+      { label: 'สัญญา', icon: 'contract', link: '/contracts', perm: Perm.CONTRACT_READ },
+    ],
+  },
+  {
+    label: 'การเงิน',
+    items: [
+      { label: 'เอกสารการเงิน', icon: 'receipt_long', link: '/finance/docs', perm: Perm.FINANCE_READ },
+      { label: 'ลูกหนี้คงค้าง', icon: 'account_balance_wallet', link: '/finance/receivables', perm: Perm.FINANCE_READ },
+    ],
+  },
+  {
     label: 'ผู้ดูแลระบบ',
     items: [
       { label: 'ผู้ใช้งาน', icon: 'group', link: '/admin/users', perm: Perm.USER_READ },
@@ -81,7 +95,7 @@ export class Shell {
 
   readonly nav = computed(() => {
     const perms = this.auth.permissions();
-    return NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || perms.has(i.perm) || (i.perm === Perm.LEAD_READ && perms.has(Perm.LEAD_READ_ALL))) })).filter(
+    return NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || perms.has(i.perm) || (i.perm === Perm.LEAD_READ && perms.has(Perm.LEAD_READ_ALL)) || (i.perm === Perm.PROJECT_READ && perms.has(Perm.PROJECT_READ_ALL)) || (i.perm === Perm.CONTRACT_READ && perms.has(Perm.FINANCE_READ)) || (i.perm === Perm.QUOTATION_APPROVE && perms.has(Perm.CONTRACT_APPROVE))) })).filter(
       (g) => g.items.length > 0,
     );
   });

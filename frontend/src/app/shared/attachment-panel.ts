@@ -30,6 +30,11 @@ export const ATTACHMENT_CATEGORIES: Record<string, string> = {
   invoice: 'ใบแจ้งหนี้',
   receipt: 'ใบเสร็จ',
   certificate: 'ใบรับรอง',
+  drawing: 'แบบก่อสร้าง',
+  report: 'รายงาน',
+  correspondence: 'หนังสือโต้ตอบ',
+  before: 'รูปก่อนแก้ไข',
+  after: 'รูปหลังแก้ไข',
   other: 'อื่น ๆ',
 };
 
@@ -54,7 +59,11 @@ export const ATTACHMENT_CATEGORIES: Record<string, string> = {
             <mat-option [value]="c[0]">{{ c[1] }}</mat-option>
           }
         </mat-select>
-        <input #picker type="file" multiple hidden (change)="onPick(picker)" />
+        @if (camera()) {
+          <button mat-stroked-button type="button" (click)="cam.click()"><mat-icon>photo_camera</mat-icon> ถ่ายรูป</button>
+          <input #cam type="file" accept="image/*" capture="environment" hidden (change)="onPick(cam)" />
+        }
+        <input #picker type="file" multiple hidden [attr.accept]="accept() || null" (change)="onPick(picker)" />
       </div>
       @if (uploading()) {
         <mat-progress-bar mode="indeterminate" />
@@ -133,6 +142,10 @@ export class AttachmentPanel implements OnDestroy {
   readonly ownerId = input.required<string>();
   readonly canWrite = input(false);
   readonly defaultCategory = input('other');
+  /** จำกัดชนิดไฟล์ เช่น image/* */
+  readonly accept = input('');
+  /** แสดงปุ่มถ่ายรูปด้วยกล้องมือถือ */
+  readonly camera = input(false);
 
   readonly items = signal<AttachmentItem[]>([]);
   readonly thumbs = signal<Record<string, string>>({});

@@ -155,7 +155,8 @@ public final class QuotationDtos {
             boolean needsApproval,
             int approvalThresholdPct,
             boolean editable,
-            boolean latestRevision) {
+            boolean latestRevision,
+            UUID projectId) {
     }
 
     public record RevisionRow(UUID id, int revision, String status, BigDecimal totalAmount, Instant createdAt, Instant sentAt) {
