@@ -123,6 +123,17 @@ export const ENTITY_LABEL: Record<string, string> = {
   qc_template: 'แม่แบบ QC',
   safety_log: 'ความปลอดภัย',
   sales_doc: 'เอกสารการเงิน',
+  supplier: 'ผู้ขาย/ผู้รับเหมาช่วง',
+  purchase_request: 'ใบขอซื้อ',
+  purchase_order: 'ใบสั่งซื้อ',
+  goods_receipt: 'ใบรับสินค้า',
+  warehouse: 'คลัง',
+  stock_doc: 'เอกสารคลัง',
+  subcontract: 'สัญญาจ้างช่วง',
+  worker: 'แรงงาน',
+  wage_payment: 'ใบสรุปค่าแรง',
+  ap_bill: 'ใบตั้งหนี้',
+  payment_voucher: 'ใบสำคัญจ่าย',
 };
 
 /** วันนี้ตามเวลาเครื่องในรูปแบบ yyyy-mm-dd (ใช้กับ input type=date) */

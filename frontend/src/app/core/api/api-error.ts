@@ -21,6 +21,7 @@ export function errorMessage(err: unknown, fallback = 'เกิดข้อผ�
     if (err.status === 403) return 'คุณไม่มีสิทธิ์ทำรายการนี้';
     if (err.status === 404) return 'ไม่พบข้อมูล';
   }
+  if (typeof err === 'string' && err) return err;
   return fallback;
 }
 

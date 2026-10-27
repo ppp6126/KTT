@@ -57,4 +57,19 @@ public final class Perm {
     public static final String FINANCE_VOID = "finance.void";
 
     public static final String NOTIFICATION_READ = "notification.read";
+
+    public static final String PURCHASE_REQUEST = "purchase.request";
+    public static final String PURCHASE_READ = "purchase.read";
+    public static final String PURCHASE_WRITE = "purchase.write";
+    public static final String PURCHASE_APPROVE = "purchase.approve";
+    public static final String STOCK_READ = "stock.read";
+    public static final String STOCK_WRITE = "stock.write";
+    public static final String SUBCONTRACT_READ = "subcontract.read";
+    public static final String SUBCONTRACT_WRITE = "subcontract.write";
+    public static final String LABOR_READ = "labor.read";
+    public static final String LABOR_WRITE = "labor.write";
+    public static final String AP_READ = "ap.read";
+    public static final String AP_WRITE = "ap.write";
+    public static final String AP_APPROVE = "ap.approve";
+    public static final String TAX_REPORT = "tax.report";
 }
