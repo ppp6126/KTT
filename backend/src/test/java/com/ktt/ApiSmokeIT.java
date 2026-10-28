@@ -188,8 +188,10 @@ class ApiSmokeIT {
                 .then().statusCode(201).body("customerName", equalTo("คุณทดสอบ ระบบ"));
         get("/api/service/surveys/summary").then().statusCode(200).body("count", equalTo(1));
         put("/api/service/warranties/" + projectId, m("warrantyUntil", today.plusDays(30).toString())).then().statusCode(204);
-        post("/api/service/tickets", m("projectId", projectId, "title", "ผนังร้าว", "category", "structure", "priority", "normal", "channel", "line"))
-                .then().statusCode(201).body("inWarranty", equalTo(true));
+        Response t2 = post("/api/service/tickets", m("projectId", projectId, "title", "ผนังร้าว", "category", "structure", "priority", "normal", "channel", "line"));
+        t2.then().statusCode(201).body("inWarranty", equalTo(true));
+        // งานที่ยังเปิดอยู่และมีนัด ต้องขึ้นในปฏิทิน (งานที่ปิดแล้วไม่แสดง)
+        post("/api/service/tickets/" + t2.path("id") + "/schedule", m("appointmentAt", appointment)).then().statusCode(200);
         assertTrue(get("/api/service/warranties").asString().contains(projectId));
 
         // ---------------------------------------------------------------- ปฏิทิน + แดชบอร์ด
