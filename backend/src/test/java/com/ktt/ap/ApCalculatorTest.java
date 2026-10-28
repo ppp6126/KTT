@@ -31,4 +31,20 @@ class ApCalculatorTest {
         assertEquals(d("3000.00"), w1.add(w2));
         assertEquals(d("50000.00"), ApCalculator.incomeFromWht(w1, d("3")));
     }
+
+    @Test
+    void incomeForCertificateIsActualPreVatPortion() {
+        // บิล 100,000 + VAT 7,000 กันประกัน 5,000 → ตัดหนี้ทั้งหมด 102,000 ; จ่าย 3 ครั้ง
+        BigDecimal gross = d("102000.00");
+        BigDecimal base = d("100000.00");
+        BigDecimal i1 = ApCalculator.incomePortion(d("33333.33"), gross, base, d("0"), false);
+        BigDecimal i2 = ApCalculator.incomePortion(d("33333.33"), gross, base, i1, false);
+        BigDecimal i3 = ApCalculator.incomePortion(d("35333.34"), gross, base, i1.add(i2), true);
+        assertEquals(d("32679.74"), i1);
+        assertEquals(d("100000.00"), i1.add(i2).add(i3));
+        // ย้อนจาก WHT ที่ปัดเศษแล้วจะเพี้ยน
+        BigDecimal w1 = ApCalculator.whtPortion(d("33333.33"), gross, d("3000.00"), d("0"), false);
+        assertEquals(d("980.39"), w1);
+        assertEquals(d("32679.67"), ApCalculator.incomeFromWht(w1, d("3")));
+    }
 }

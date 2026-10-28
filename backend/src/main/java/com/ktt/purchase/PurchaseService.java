@@ -41,6 +41,7 @@ import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 
 import java.math.BigDecimal;
@@ -512,7 +513,8 @@ public class PurchaseService {
         if (!currentUser.can(Perm.PURCHASE_WRITE) && !currentUser.can(Perm.STOCK_WRITE)) {
             throw ApiException.forbidden("forbidden", "คุณไม่มีสิทธิ์รับสินค้า");
         }
-        PurchaseOrder po = requirePo(poId);
+        // ล็อกใบสั่งซื้อกันรับของพร้อมกันเกินจำนวนสั่ง
+        PurchaseOrder po = lockPo(poId);
         if (!"approved".equals(po.status) && !"partial".equals(po.status)) {
             throw ApiException.conflict("invalid_status", "รับของได้เฉพาะใบสั่งซื้อที่อนุมัติแล้ว");
         }
@@ -540,7 +542,7 @@ public class PurchaseService {
             if (!seen.add(line.poItemId())) {
                 throw ApiException.badRequest("duplicate_line", "รายการซ้ำ");
             }
-            PurchaseOrderItem it = PurchaseOrderItem.findById(line.poItemId());
+            PurchaseOrderItem it = PurchaseOrderItem.findById(line.poItemId(), LockModeType.PESSIMISTIC_WRITE);
             if (it == null || !it.poId.equals(po.id)) {
                 throw ApiException.badRequest("invalid_item", "รายการไม่ได้อยู่ในใบสั่งซื้อนี้");
             }
@@ -576,11 +578,11 @@ public class PurchaseService {
         if (!currentUser.can(Perm.PURCHASE_WRITE) && !currentUser.can(Perm.STOCK_WRITE)) {
             throw ApiException.forbidden("forbidden", "คุณไม่มีสิทธิ์ยกเลิกใบรับสินค้า");
         }
-        GoodsReceipt gr = GoodsReceipt.findById(grId);
+        GoodsReceipt gr = grId == null ? null : GoodsReceipt.findById(grId, LockModeType.PESSIMISTIC_WRITE);
         if (gr == null || "void".equals(gr.status)) {
             throw ApiException.notFound("ไม่พบใบรับสินค้า");
         }
-        PurchaseOrder po = requirePo(gr.poId);
+        PurchaseOrder po = lockPo(gr.poId);
         Number billed = (Number) em.createNativeQuery("select count(*) from ap_bills where po_id = ?1 and status <> 'void' and deleted_at is null")
                 .setParameter(1, po.id).getSingleResult();
         if (billed.longValue() > 0) {
@@ -588,7 +590,7 @@ public class PurchaseService {
         }
         stock.reverse("goods_receipt", gr.id, DocNumberService.today());
         for (GoodsReceiptItem gi : GoodsReceiptItem.listFor(gr.id)) {
-            PurchaseOrderItem it = PurchaseOrderItem.findById(gi.poItemId);
+            PurchaseOrderItem it = PurchaseOrderItem.findById(gi.poItemId, LockModeType.PESSIMISTIC_WRITE);
             it.receivedQty = it.receivedQty.subtract(gi.quantity).max(BigDecimal.ZERO);
         }
         gr.status = "void";
@@ -760,6 +762,14 @@ public class PurchaseService {
         if (!currentUser.id().equals(x.createdBy) && !currentUser.can(Perm.PURCHASE_WRITE)) {
             throw ApiException.forbidden("forbidden", "แก้ไขได้เฉพาะใบขอซื้อของตนเอง");
         }
+    }
+
+    private PurchaseOrder lockPo(UUID id) {
+        PurchaseOrder x = id == null ? null : PurchaseOrder.findById(id, LockModeType.PESSIMISTIC_WRITE);
+        if (x == null) {
+            throw ApiException.notFound("ไม่พบใบสั่งซื้อ");
+        }
+        return x;
     }
 
     private PurchaseOrder requirePo(UUID id) {

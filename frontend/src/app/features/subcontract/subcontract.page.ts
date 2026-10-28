@@ -411,6 +411,9 @@ export class ClaimDialog {
                         <button mat-button (click)="approve(c.id)">ตรวจรับ</button>
                         <button mat-icon-button (click)="removeClaim(c.id)" aria-label="ลบงวด"><mat-icon>delete</mat-icon></button>
                       }
+                      @if (c.status === 'approved' && !c.apBillId && canWrite) {
+                        <button mat-button (click)="approve(c.id)">ตั้งหนี้ใหม่</button>
+                      }
                     </td>
                   </tr>
                 } @empty {

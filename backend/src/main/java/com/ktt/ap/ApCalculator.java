@@ -51,7 +51,15 @@ public final class ApCalculator {
         return applied.multiply(billWht).divide(gross, 2, RoundingMode.HALF_UP);
     }
 
-    /** เงินได้ที่ใช้ใน 50 ทวิ ย้อนจากภาษีที่หักและอัตรา */
+    /**
+     * เงินได้ (ก่อน VAT) ของการจ่ายครั้งนี้ สำหรับ 50 ทวิ: ตามสัดส่วนยอดตัดหนี้ ; จ่ายครั้งสุดท้ายรับส่วนที่เหลือ
+     * @param billIncome ฐานภาษีหัก ณ ที่จ่ายของทั้งบิล (รวมเงินก่อน VAT) หรือ 0 ถ้าบิลไม่มีหัก ณ ที่จ่าย
+     */
+    public static BigDecimal incomePortion(BigDecimal applied, BigDecimal gross, BigDecimal billIncome, BigDecimal priorIncome, boolean isFinal) {
+        return whtPortion(applied, gross, billIncome, priorIncome, isFinal);
+    }
+
+    /** เงินได้ย้อนจากภาษีที่หักและอัตรา (ใช้ได้เฉพาะประมาณการ เพราะ WHT ปัดเศษแล้ว ; 50 ทวิใช้ incomePortion) */
     public static BigDecimal incomeFromWht(BigDecimal wht, BigDecimal ratePct) {
         if (Money.isZero(ratePct)) {
             return BigDecimal.ZERO.setScale(2);

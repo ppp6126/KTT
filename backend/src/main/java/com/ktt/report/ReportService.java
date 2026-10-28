@@ -31,7 +31,7 @@ import java.util.UUID;
  * ต้นทุนจริงของโครงการ
  * <ul>
  *   <li>วัสดุ = เบิกจากคลัง − รับคืน + รับของส่งตรงหน้างาน (มูลค่าก่อน VAT)</li>
- *   <li>ผู้รับเหมาช่วง = งวดเบิกที่ตรวจรับแล้ว</li>
+ *   <li>ผู้รับเหมาช่วง = งวดเบิกที่ตรวจรับแล้ว + บิลหมวดผู้รับเหมาช่วงที่บันทึกเอง (ไม่ผ่านงวดเบิก)</li>
  *   <li>ค่าแรง = ค่าแรงตามบันทึกเวลาทำงาน</li>
  *   <li>อื่น ๆ = บิลเจ้าหนี้ที่ระบุโครงการ ไม่อ้างอิง PO/งวดจ้างช่วง (เช่น ค่าเช่าเครื่องจักร ค่าขนส่ง)</li>
  * </ul>
@@ -73,17 +73,9 @@ public class ReportService {
         requireCost();
         Project p = projects.requireVisible(projectId);
         Map<String, BigDecimal> actual = actualByCategory(p.id);
-        BigDecimal committedPo = SqlValues.decimal0(em.createNativeQuery("""
-                        select coalesce(sum(greatest(i.quantity - i.received_qty, 0) * i.unit_price
-                               * case when o.subtotal > 0 then (o.subtotal - o.discount_amount) / o.subtotal else 1 end), 0)
-                        from purchase_order_items i join purchase_orders o on o.id = i.po_id
-                        where o.project_id = ?1 and o.status in ('approved', 'partial') and o.deleted_at is null""")
-                .setParameter(1, p.id).getSingleResult());
-        BigDecimal committedSc = SqlValues.decimal0(em.createNativeQuery("""
-                        select coalesce(sum(s.amount - coalesce((select sum(c.amount) from subcontract_claims c
-                               where c.subcontract_id = s.id and c.status <> 'draft'), 0)), 0)
-                        from subcontracts s where s.project_id = ?1 and s.status = 'active' and s.deleted_at is null""")
-                .setParameter(1, p.id).getSingleResult());
+        BigDecimal[] com = committed(p.id);
+        BigDecimal committedPo = com[0];
+        BigDecimal committedSc = com[1];
         List<CostLine> lines = List.of(
                 new CostLine("material", "วัสดุ", actual.get("material"), Money.round2(committedPo)),
                 new CostLine("subcontract", "ผู้รับเหมาช่วง", actual.get("subcontract"), Money.round2(committedSc)),
@@ -113,17 +105,40 @@ public class ReportService {
             BigDecimal actual = a.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
             BigDecimal revenue = SqlValues.decimal0(revenue(p.id)[0]);
             BigDecimal budget = p.budgetCost == null ? BigDecimal.ZERO : p.budgetCost;
-            BigDecimal committed = SqlValues.decimal0(em.createNativeQuery("""
-                            select coalesce(sum(greatest(i.quantity - i.received_qty, 0) * i.unit_price), 0)
-                            from purchase_order_items i join purchase_orders o on o.id = i.po_id
-                            where o.project_id = ?1 and o.status in ('approved', 'partial') and o.deleted_at is null""")
-                    .setParameter(1, p.id).getSingleResult());
+            BigDecimal[] com = committed(p.id);
+            BigDecimal committed = com[0].add(com[1]);
             BigDecimal forecast = actual.add(committed).max(budget);
             out.add(new CostRow(p.id, p.code, p.name, p.status, revenue, budget, Money.round2(actual), Money.round2(committed),
                     pct(revenue.subtract(forecast), revenue), pct(actual, budget), p.progressPct));
         }
         return out;
     }
+
+    /**
+     * ภาระผูกพัน [PO ที่ยังไม่รับของ (หลังส่วนลดท้ายบิล), สัญญาจ้างช่วงที่ยังไม่เบิก] ก่อน VAT
+     * ใช้ร่วมกันทั้งรายงานต้นทุนรายโครงการและสรุปทุกโครงการ
+     */
+    private BigDecimal[] committed(UUID projectId) {
+        Object[] r = (Object[]) em.createNativeQuery("""
+                        select
+                          coalesce((select sum(greatest(i.quantity - i.received_qty, 0) * i.unit_price
+                                     * case when o.subtotal > 0 then (o.subtotal - o.discount_amount) / o.subtotal else 1 end)
+                                    from purchase_order_items i join purchase_orders o on o.id = i.po_id
+                                    where o.project_id = ?1 and o.status in ('approved', 'partial') and o.deleted_at is null), 0),
+                          coalesce((select sum(greatest(s.amount - coalesce((select sum(c.amount) from subcontract_claims c
+                                     where c.subcontract_id = s.id and c.status <> 'draft'), 0), 0))
+                                    from subcontracts s where s.project_id = ?1 and s.status = 'active' and s.deleted_at is null), 0)
+                        """).setParameter(1, projectId).getSingleResult();
+        return new BigDecimal[]{Money.round2(SqlValues.decimal0(r[0])), Money.round2(SqlValues.decimal0(r[1]))};
+    }
+
+    /*
+     * บิลเจ้าหนี้ที่นับเป็นต้นทุนโดยตรง: ไม่อ้างอิง PO (วัสดุคิดตอนรับ/เบิก), ไม่ใช่บิลจากงวดเบิก (นับจากงวดแล้ว)
+     * และไม่ใช่บิลคืนเงินประกัน (ต้นทุนนับไปแล้วตอนงวดเบิก) ; หมวด subcontract → ผู้รับเหมาช่วง, อื่น ๆ → ค่าใช้จ่ายอื่น
+     */
+    private static final String DIRECT_BILL = """
+            b.project_id = ?1 and b.po_id is null and b.subcontract_claim_id is null and b.subcontract_id is null
+            and b.status in ('approved', 'partial', 'paid') and b.deleted_at is null""";
 
     private Map<String, BigDecimal> actualByCategory(UUID projectId) {
         Object[] r = (Object[]) em.createNativeQuery("""
@@ -132,12 +147,11 @@ public class ReportService {
                           + coalesce((select sum(gi.quantity * gi.unit_cost) from goods_receipt_items gi join goods_receipts g on g.id = gi.gr_id
                                       where g.project_id = ?1 and g.warehouse_id is null and g.status = 'posted'), 0),
                           coalesce((select sum(c.amount) from subcontract_claims c join subcontracts s on s.id = c.subcontract_id
-                                      where s.project_id = ?1 and c.status <> 'draft' and s.deleted_at is null), 0),
+                                      where s.project_id = ?1 and c.status <> 'draft' and s.deleted_at is null), 0)
+                          + coalesce((select sum(b.subtotal) from ap_bills b where b.category = 'subcontract' and %1$s), 0),
                           coalesce((select sum(t.wage) from timesheets t where t.project_id = ?1), 0),
-                          coalesce((select sum(b.subtotal) from ap_bills b where b.project_id = ?1 and b.po_id is null
-                                      and b.subcontract_claim_id is null and b.category <> 'subcontract'
-                                      and b.status in ('approved', 'partial', 'paid') and b.deleted_at is null), 0)
-                        """).setParameter(1, projectId).getSingleResult();
+                          coalesce((select sum(b.subtotal) from ap_bills b where b.category <> 'subcontract' and %1$s), 0)
+                        """.formatted(DIRECT_BILL)).setParameter(1, projectId).getSingleResult();
         Map<String, BigDecimal> out = new LinkedHashMap<>();
         out.put("material", Money.round2(SqlValues.decimal0(r[0])));
         out.put("subcontract", Money.round2(SqlValues.decimal0(r[1])));
@@ -175,10 +189,11 @@ public class ReportService {
                           union all
                           select t.work_date, 0, 0, t.wage, 0 from timesheets t where t.project_id = ?1
                           union all
-                          select b.bill_date, 0, 0, 0, b.subtotal from ap_bills b where b.project_id = ?1 and b.po_id is null
-                            and b.subcontract_claim_id is null and b.category <> 'subcontract'
-                            and b.status in ('approved', 'partial', 'paid') and b.deleted_at is null
-                        ) x group by m order by m""").setParameter(1, projectId).getResultList();
+                          select b.bill_date,  0,
+                                 case when b.category = 'subcontract' then b.subtotal else 0 end, 0,
+                                 case when b.category = 'subcontract' then 0 else b.subtotal end
+                            from ap_bills b where %1$s
+                        ) x group by m order by m""".formatted(DIRECT_BILL)).setParameter(1, projectId).getResultList();
         return rows.stream().map(r -> new CostMonth((String) r[0], Money.round2(SqlValues.decimal0(r[1])), Money.round2(SqlValues.decimal0(r[2])),
                 Money.round2(SqlValues.decimal0(r[3])), Money.round2(SqlValues.decimal0(r[4])))).toList();
     }

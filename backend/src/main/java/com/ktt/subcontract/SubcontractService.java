@@ -198,7 +198,8 @@ public class SubcontractService {
         if (c == null || !c.subcontractId.equals(s.id)) {
             throw ApiException.notFound("ไม่พบงวดเบิก");
         }
-        if (!"draft".equals(c.status)) {
+        // ร่าง หรือ อนุมัติแล้วแต่บิลถูกยกเลิก (ข้อมูลเก่า) → ตั้งหนี้ใหม่ได้
+        if (!"draft".equals(c.status) && !("approved".equals(c.status) && c.apBillId == null)) {
             throw ApiException.conflict("invalid_status", "งวดนี้อนุมัติแล้ว");
         }
         if (currentUser.id().equals(c.createdBy) && !currentUser.can(Perm.PROJECT_WRITE)) {
@@ -208,7 +209,7 @@ public class SubcontractService {
         c.approvedBy = currentUser.id();
         c.approvedAt = Instant.now();
         BigDecimal retention = Money.pct(c.amount, s.retentionPct);
-        ApBill bill = ap.createFromClaim(c.id, s.supplierId, s.projectId,
+        ApBill bill = ap.createFromClaim(s.id, c.id, s.supplierId, s.projectId,
                 s.title + " งวดที่ " + c.claimNo + " " + c.description, c.amount, s.vatPct, s.whtPct, retention, c.claimDate);
         c.apBillId = bill.id;
         c.status = "billed";
@@ -233,11 +234,17 @@ public class SubcontractService {
     public Dto releaseRetention(UUID id, BigDecimal amount) {
         requireWrite();
         Subcontract s = require(id);
+        // ล็อกสัญญากันคืนเงินประกันซ้อนกันเกินยอด
+        em.lock(s, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        em.refresh(s);
+        if (amount == null || amount.signum() <= 0) {
+            throw ApiException.badRequest("invalid_amount", "ยอดคืนต้องมากกว่า 0");
+        }
         BigDecimal held = retentionHeld(s);
         if (amount.compareTo(held) > 0) {
             throw ApiException.badRequest("over_release", "คืนได้ไม่เกิน " + held.toPlainString() + " บาท");
         }
-        ApBill bill = ap.createFromClaim(null, s.supplierId, s.projectId, "คืนเงินประกันผลงาน " + s.docNo + " " + s.title,
+        ApBill bill = ap.createFromClaim(s.id, null, s.supplierId, s.projectId, "คืนเงินประกันผลงาน " + s.docNo + " " + s.title,
                 Money.round2(amount), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, com.ktt.docnum.DocNumberService.today());
         bill.notes = "คืนเงินประกันผลงานตามสัญญาจ้างช่วง " + s.docNo;
         s.retentionReleased = Money.round2(s.retentionReleased.add(amount));
@@ -289,15 +296,15 @@ public class SubcontractService {
         Supplier sup = Supplier.findById(s.supplierId);
         List<ClaimDto> claims = new ArrayList<>();
         Map<UUID, String> names = UserNames.of(SubcontractClaim.listFor(s.id).stream().map(c -> c.approvedBy).toList());
-        BigDecimal paid = BigDecimal.ZERO;
+        // จ่ายแล้ว = บิลทุกใบของสัญญานี้ (งวดเบิก + คืนเงินประกัน) ที่ไม่ยกเลิก
+        BigDecimal paid = SqlValues.decimal0(em.createNativeQuery(
+                "select coalesce(sum(paid_amount), 0) from ap_bills where subcontract_id = ?1 and status <> 'void' and deleted_at is null")
+                .setParameter(1, s.id).getSingleResult());
         for (SubcontractClaim c : SubcontractClaim.listFor(s.id)) {
             ApBill b = c.apBillId == null ? null : ApBill.findById(c.apBillId);
             BigDecimal ret = Money.pct(c.amount, s.retentionPct);
             BigDecimal wht = Money.pct(c.amount, s.whtPct);
             BigDecimal vat = Money.pct(c.amount, s.vatPct);
-            if (b != null && !"void".equals(b.status)) {
-                paid = paid.add(b.paidAmount);
-            }
             claims.add(new ClaimDto(c.id, c.claimNo, c.claimDate, c.description, c.progressPct, c.amount, ret, wht, vat,
                     c.amount.add(vat).subtract(ret).subtract(wht), c.status, c.apBillId, b == null ? null : b.docNo,
                     b == null ? null : b.status, names.get(c.approvedBy), c.approvedAt));

@@ -159,7 +159,7 @@ public class DashboardService {
                   select t.work_date, t.wage from timesheets t
                   union all
                   select b.bill_date, b.subtotal from ap_bills b where b.project_id is not null and b.po_id is null
-                    and b.subcontract_claim_id is null and b.category <> 'subcontract'
+                    and b.subcontract_claim_id is null and b.subcontract_id is null
                     and b.status in ('approved', 'partial', 'paid') and b.deleted_at is null
                 ) x where d >= ?1 group by 1""").setParameter(1, from).getResultList();
         cost.forEach(r -> add(m, (String) r[0], 2, r[1]));

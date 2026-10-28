@@ -75,9 +75,10 @@ public class StockService {
                         from warehouses w left join projects p on p.id = w.project_id
                         where w.deleted_at is null order by w.project_id nulls first, w.code
                         """).getResultList();
+        boolean cost = canSeeCost();
         return rows.stream().map(r -> new WarehouseDto(SqlValues.uuid(r[0]), (String) r[1], (String) r[2],
                 SqlValues.uuid(r[3]), (String) r[4], (String) r[5], (Boolean) r[6],
-                SqlValues.decimal0(r[7]).setScale(2, RoundingMode.HALF_UP))).toList();
+                cost ? SqlValues.decimal0(r[7]).setScale(2, RoundingMode.HALF_UP) : null)).toList();
     }
 
     @Transactional
@@ -156,7 +157,7 @@ public class StockService {
         }
         @SuppressWarnings("unchecked")
         List<Object[]> rows = query.getResultList();
-        boolean cost = currentUser.canViewCost() || currentUser.can(Perm.STOCK_WRITE);
+        boolean cost = canSeeCost();
         List<OnHandRow> out = new ArrayList<>();
         for (Object[] r : rows) {
             StockMath.Position p = new StockMath.Position(SqlValues.decimal0(r[7]), SqlValues.decimal0(r[8]));
@@ -183,6 +184,7 @@ public class StockService {
                         where m.material_id = ?1 and m.warehouse_id = ?2
                         order by m.movement_date, m.created_at
                         """).setParameter(1, materialId).setParameter(2, warehouseId).getResultList();
+        boolean canCost = canSeeCost();
         List<LedgerRow> out = new ArrayList<>();
         BigDecimal bal = BigDecimal.ZERO;
         BigDecimal val = BigDecimal.ZERO;
@@ -191,8 +193,8 @@ public class StockService {
             BigDecimal cost = SqlValues.decimal0(r[3]);
             bal = bal.add(qty);
             val = val.add(qty.multiply(cost));
-            out.add(new LedgerRow(SqlValues.date(r[0]), (String) r[1], qty, cost, (String) r[4], SqlValues.uuid(r[5]),
-                    (String) r[8], (String) r[7], (String) r[6], bal, val.setScale(2, RoundingMode.HALF_UP)));
+            out.add(new LedgerRow(SqlValues.date(r[0]), (String) r[1], qty, canCost ? cost : null, (String) r[4], SqlValues.uuid(r[5]),
+                    (String) r[8], (String) r[7], (String) r[6], bal, canCost ? val.setScale(2, RoundingMode.HALF_UP) : null));
         }
         return out;
     }
@@ -215,12 +217,18 @@ public class StockService {
         }
         @SuppressWarnings("unchecked")
         List<Object[]> rows = q.getResultList();
+        boolean cost = canSeeCost();
         return rows.stream().map(r -> new StockDocDto(SqlValues.uuid(r[0]), (String) r[1], (String) r[2], SqlValues.date(r[3]),
                 (String) r[4], (String) r[5], (String) r[6], (String) r[7], (String) r[8],
-                SqlValues.decimal0(r[9]).setScale(2, RoundingMode.HALF_UP), lines(SqlValues.uuid(r[0])))).toList();
+                cost ? SqlValues.decimal0(r[9]).setScale(2, RoundingMode.HALF_UP) : null, lines(SqlValues.uuid(r[0]), cost))).toList();
     }
 
-    private List<DocLine> lines(UUID docId) {
+    /** ต้นทุน/มูลค่าคลัง: แสดงเฉพาะผู้มีสิทธิ์ดูต้นทุนหรือผู้จัดการคลัง (กฎเดียวกับ onHand) */
+    private boolean canSeeCost() {
+        return currentUser.canViewCost() || currentUser.can(Perm.STOCK_WRITE);
+    }
+
+    private List<DocLine> lines(UUID docId, boolean cost) {
         @SuppressWarnings("unchecked")
         List<Object[]> rows = em.createNativeQuery("""
                         select m.material_id, mt.code, mt.name, mt.unit, m.qty, m.unit_cost, m.note, m.kind
@@ -228,7 +236,7 @@ public class StockService {
                         where m.ref_type = 'stock_doc' and m.ref_id = ?1 and m.kind <> 'transfer_in' order by mt.name
                         """).setParameter(1, docId).getResultList();
         return rows.stream().map(r -> new DocLine(SqlValues.uuid(r[0]), (String) r[1], (String) r[2], (String) r[3],
-                SqlValues.decimal0(r[4]), SqlValues.decimal0(r[5]), (String) r[6])).toList();
+                SqlValues.decimal0(r[4]), cost ? SqlValues.decimal0(r[5]) : null, (String) r[6])).toList();
     }
 
     // ================================================================= posting
@@ -252,25 +260,33 @@ public class StockService {
         m.persist();
     }
 
-    /** ย้อนรายการทั้งหมดของเอกสารอ้างอิง (ยกเลิกใบรับสินค้า) ต้องมีของเหลือพอ */
+    /**
+     * ย้อนรายการทั้งหมดของเอกสารอ้างอิง (ยกเลิกใบรับสินค้า) ต้องมีของเหลือพอ
+     * <p>
+     * ตัดออกด้วยต้นทุนเฉลี่ยปัจจุบันของคลัง (ไม่ใช่ราคาตอนรับ) เพื่อให้มูลค่าคงคลังไม่ติดลบและต้นทุนเฉลี่ยไม่เพี้ยน
+     * ถ้าตัดจนหมดคลังจะล้างมูลค่าคงเหลือทั้งหมด ส่วนต่างจากราคาตอนรับ (ซึ่งถูกตัดเป็นต้นทุนโครงการไปแล้วตอนเบิก)
+     * ถือว่าจบที่ต้นทุนโครงการที่เบิกไป ไม่ย้อนแก้เอกสารเบิกเดิม
+     */
     @Transactional(Transactional.TxType.MANDATORY)
     public void reverse(String refType, UUID refId, LocalDate date) {
         List<StockMovement> list = StockMovement.list("refType = ?1 and refId = ?2", refType, refId);
         for (StockMovement src : list) {
             lock(src.materialId, src.warehouseId);
+            BigDecimal cost = src.unitCost;
             if (src.qty.signum() > 0) {
                 StockMath.Position p = position(src.materialId, src.warehouseId);
                 if (p.qty().compareTo(src.qty) < 0) {
                     Material mt = Material.findById(src.materialId);
                     throw ApiException.conflict("stock_used", "วัสดุ \"" + (mt == null ? "" : mt.name) + "\" ถูกเบิกออกไปแล้ว ยกเลิกไม่ได้ ให้ทำรายการปรับยอดแทน");
                 }
+                cost = StockMath.outCost(p, src.qty);
             }
             StockMovement m = new StockMovement();
             m.movementDate = date;
             m.materialId = src.materialId;
             m.warehouseId = src.warehouseId;
             m.qty = src.qty.negate();
-            m.unitCost = src.unitCost;
+            m.unitCost = cost;
             m.kind = "adjust";
             m.projectId = src.projectId;
             m.refType = refType;
@@ -342,6 +358,14 @@ public class StockService {
                     move(d, mt.id, to.id, qty, cost, "transfer_in", null, in.note());
                 }
                 case "return" -> {
+                    // คืนได้ไม่เกินยอดที่โครงการเบิกไปสุทธิ (เบิก − คืนแล้ว) ของวัสดุนี้
+                    em.createNativeQuery("select pg_advisory_xact_lock(hashtext(?1))")
+                            .setParameter(1, "stock_return:" + d.projectId + ":" + mt.id).getSingleResult();
+                    BigDecimal net = netIssued(d.projectId, mt.id);
+                    if (qty.compareTo(net) > 0) {
+                        throw ApiException.badRequest("over_return", "\"" + mt.name + "\" โครงการเบิกไปสุทธิ "
+                                + net.stripTrailingZeros().toPlainString() + " " + mt.unit + " คืนเกินยอดที่เบิกไม่ได้");
+                    }
                     // คืนของจากโครงการด้วยต้นทุนเฉลี่ยที่โครงการเบิกไป (ถ้าไม่มี ใช้ต้นทุนเฉลี่ยคลัง)
                     BigDecimal cost = projectIssueCost(d.projectId, mt.id, p.avgCost().signum() > 0 ? p.avgCost() : mt.costPrice);
                     move(d, mt.id, from.id, qty, cost, "return", d.projectId, in.note());
@@ -368,11 +392,8 @@ public class StockService {
             throw ApiException.conflict("insufficient_stock", "\"" + mt.name + "\" คงเหลือ " + p.qty().stripTrailingZeros().toPlainString()
                     + " " + mt.unit + " ไม่พอจ่าย " + qty.stripTrailingZeros().toPlainString());
         }
-        BigDecimal cost = p.avgCost();
-        // จ่ายหมดคลัง: ใช้มูลค่าคงเหลือทั้งหมดเพื่อไม่ให้มีเศษค้าง
-        if (p.qty().compareTo(qty) == 0 && qty.signum() > 0) {
-            cost = p.value().divide(qty, 4, RoundingMode.HALF_UP);
-        }
+        // ต้นทุนเฉลี่ย ; จ่ายหมดคลังใช้มูลค่าคงเหลือทั้งหมด ; ไม่ติดลบ
+        BigDecimal cost = StockMath.outCost(p, qty);
         move(d, mt.id, wh, qty.negate(), cost, kind, projectId, note);
         return cost;
     }
@@ -391,6 +412,15 @@ public class StockService {
         m.note = UserNames.blankToNull(note);
         m.createdBy = currentUser.id();
         m.persist();
+    }
+
+    /** ยอดเบิกสุทธิของโครงการ (เบิก − รับคืน) ต่อวัสดุ ทุกคลัง */
+    private BigDecimal netIssued(UUID projectId, UUID materialId) {
+        em.flush();
+        return SqlValues.decimal0(em.createNativeQuery("""
+                        select coalesce(sum(-qty), 0) from stock_movements
+                        where project_id = ?1 and material_id = ?2 and kind in ('issue', 'return')
+                        """).setParameter(1, projectId).setParameter(2, materialId).getSingleResult()).max(BigDecimal.ZERO);
     }
 
     private BigDecimal projectIssueCost(UUID projectId, UUID materialId, BigDecimal fallback) {

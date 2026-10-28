@@ -35,6 +35,7 @@ import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 
 import java.math.BigDecimal;
@@ -137,7 +138,7 @@ public class ApService {
 
     /** ใช้ภายใน: บิลจากงวดผู้รับเหมาช่วงที่อนุมัติแล้ว */
     @Transactional(Transactional.TxType.MANDATORY)
-    public ApBill createFromClaim(UUID claimId, UUID supplierId, UUID projectId, String description, BigDecimal amount,
+    public ApBill createFromClaim(UUID subcontractId, UUID claimId, UUID supplierId, UUID projectId, String description, BigDecimal amount,
                                   BigDecimal vatPct, BigDecimal whtPct, BigDecimal retention, LocalDate date) {
         ApBill b = new ApBill();
         b.docNo = docNumbers.next(projects.prefix("ap_bill", "AP"), date);
@@ -148,6 +149,7 @@ public class ApService {
         b.dueDate = date.plusDays(s.creditDays);
         b.taxPeriod = period(date);
         b.projectId = projectId;
+        b.subcontractId = subcontractId;
         b.subcontractClaimId = claimId;
         b.category = "subcontract";
         b.vatPct = vatPct;
@@ -220,6 +222,9 @@ public class ApService {
         if (!"draft".equals(b.status)) {
             throw ApiException.conflict("invalid_status", "อนุมัติได้เฉพาะบิลฉบับร่าง");
         }
+        if (currentUser.id().equals(b.createdBy) && !isOwner()) {
+            throw ApiException.forbidden("self_approval", "อนุมัติบิลที่ตัวเองบันทึกไม่ได้");
+        }
         if (b.totalAmount.signum() <= 0) {
             throw ApiException.badRequest("invalid_amount", "ยอดบิลต้องมากกว่า 0");
         }
@@ -236,7 +241,7 @@ public class ApService {
         if (!currentUser.can(Perm.AP_APPROVE)) {
             throw ApiException.forbidden("forbidden", "คุณไม่มีสิทธิ์ยกเลิกบิล");
         }
-        ApBill b = requireBill(id);
+        ApBill b = lockBill(id);
         if (b.paidAmount.signum() > 0 || "void".equals(b.status)) {
             throw ApiException.conflict("has_payment", "บิลที่จ่ายแล้วยกเลิกไม่ได้ ให้ยกเลิกใบสำคัญจ่ายก่อน");
         }
@@ -249,10 +254,7 @@ public class ApService {
         }
         b.status = "void";
         b.notes = (b.notes == null ? "" : b.notes + "\n") + "ยกเลิก: " + (reason == null ? "" : reason.trim());
-        if (b.subcontractClaimId != null) {
-            em.createNativeQuery("update subcontract_claims set status = 'approved', ap_bill_id = null where id = ?1")
-                    .setParameter(1, b.subcontractClaimId).executeUpdate();
-        }
+        unlinkSubcontract(b);
         audit.log("ap_bill", b.id, AuditService.ACTION_DELETE, null, Map.of("status", "void"));
         return toDto(b);
     }
@@ -260,14 +262,11 @@ public class ApService {
     @Transactional
     public void deleteBill(UUID id) {
         requireWrite();
-        ApBill b = requireBill(id);
+        ApBill b = lockBill(id);
         if (!"draft".equals(b.status)) {
             throw ApiException.conflict("not_editable", "ลบได้เฉพาะบิลฉบับร่าง");
         }
-        if (b.subcontractClaimId != null) {
-            em.createNativeQuery("update subcontract_claims set status = 'approved', ap_bill_id = null where id = ?1")
-                    .setParameter(1, b.subcontractClaimId).executeUpdate();
-        }
+        unlinkSubcontract(b);
         b.softDelete();
         audit.log("ap_bill", b.id, AuditService.ACTION_DELETE, Map.of("docNo", b.docNo), null);
     }
@@ -344,7 +343,7 @@ public class ApService {
     @Transactional
     public PvDto payPv(UUID id, LocalDate paidDate, String bankRef) {
         requireWrite();
-        PaymentVoucher v = requirePv(id);
+        PaymentVoucher v = lockPv(id);
         if (!"approved".equals(v.status)) {
             throw ApiException.conflict("invalid_status", "ต้องอนุมัติใบสำคัญจ่ายก่อน");
         }
@@ -356,11 +355,13 @@ public class ApService {
         }
         // คำนวณ WHT ใหม่ ณ เวลาจ่ายจริง (บิลอาจถูกจ่ายบางส่วนไปแล้วระหว่างนี้)
         List<Object[]> lines = lines(v.id);
+        Map<UUID, ApBill> bills = lockBills(lines);
         BigDecimal gross = BigDecimal.ZERO;
         BigDecimal whtTotal = BigDecimal.ZERO;
         Map<BigDecimal, BigDecimal> whtByRate = new LinkedHashMap<>();
+        Map<BigDecimal, BigDecimal> incomeByRate = new LinkedHashMap<>();
         for (Object[] l : lines) {
-            ApBill b = ApBill.findById(SqlValues.uuid(l[0]));
+            ApBill b = bills.get(SqlValues.uuid(l[0]));
             BigDecimal amount = SqlValues.decimal0(l[1]);
             if (!Set.of("approved", "partial").contains(b.status)) {
                 throw ApiException.conflict("bill_closed", "บิล " + b.docNo + " ไม่อยู่ในสถานะค้างจ่าย");
@@ -371,14 +372,16 @@ public class ApService {
             boolean isFinal = amount.compareTo(b.outstanding()) == 0;
             BigDecimal priorWht = priorWht(b.id);
             BigDecimal wht = ApCalculator.whtPortion(amount, b.payableGross(), b.whtAmount, priorWht, isFinal);
-            em.createNativeQuery("update payment_voucher_lines set wht_amount = ?1 where pv_id = ?2 and bill_id = ?3")
-                    .setParameter(1, wht).setParameter(2, v.id).setParameter(3, b.id).executeUpdate();
+            BigDecimal income = ApCalculator.incomePortion(amount, b.payableGross(), whtBase(b), priorIncome(b.id), isFinal);
+            em.createNativeQuery("update payment_voucher_lines set wht_amount = ?1, income_amount = ?4 where pv_id = ?2 and bill_id = ?3")
+                    .setParameter(1, wht).setParameter(2, v.id).setParameter(3, b.id).setParameter(4, income).executeUpdate();
             b.paidAmount = Money.round2(b.paidAmount.add(amount));
             b.status = b.outstanding().signum() <= 0 ? "paid" : "partial";
             gross = gross.add(amount);
             whtTotal = whtTotal.add(wht);
             if (wht.signum() > 0) {
                 whtByRate.merge(b.whtPct, wht, BigDecimal::add);
+                incomeByRate.merge(b.whtPct, income, BigDecimal::add);
             }
         }
         v.grossAmount = Money.round2(gross);
@@ -387,7 +390,7 @@ public class ApService {
         v.status = "paid";
         Supplier s = Supplier.findById(v.supplierId);
         for (Map.Entry<BigDecimal, BigDecimal> e : whtByRate.entrySet()) {
-            issueCertificate(v, s, e.getKey(), e.getValue());
+            issueCertificate(v, s, e.getKey(), e.getValue(), incomeByRate.getOrDefault(e.getKey(), BigDecimal.ZERO));
         }
         audit.log("payment_voucher", v.id, AuditService.ACTION_UPDATE, Map.of("status", "approved"),
                 Map.of("status", "paid", "net", v.netPaid, "wht", v.whtAmount));
@@ -399,13 +402,15 @@ public class ApService {
         if (!currentUser.can(Perm.AP_APPROVE)) {
             throw ApiException.forbidden("forbidden", "คุณไม่มีสิทธิ์ยกเลิกใบสำคัญจ่าย");
         }
-        PaymentVoucher v = requirePv(id);
+        PaymentVoucher v = lockPv(id);
         if ("void".equals(v.status)) {
             throw ApiException.conflict("already_void", "ยกเลิกแล้ว");
         }
         if ("paid".equals(v.status)) {
-            for (Object[] l : lines(v.id)) {
-                ApBill b = ApBill.findById(SqlValues.uuid(l[0]));
+            List<Object[]> lines = lines(v.id);
+            Map<UUID, ApBill> bills = lockBills(lines);
+            for (Object[] l : lines) {
+                ApBill b = bills.get(SqlValues.uuid(l[0]));
                 b.paidAmount = Money.round2(b.paidAmount.subtract(SqlValues.decimal0(l[1]))).max(BigDecimal.ZERO);
                 b.status = b.paidAmount.signum() == 0 ? "approved" : "partial";
             }
@@ -429,7 +434,7 @@ public class ApService {
 
     // ================================================================= internals
 
-    private void issueCertificate(PaymentVoucher v, Supplier s, BigDecimal rate, BigDecimal wht) {
+    private void issueCertificate(PaymentVoucher v, Supplier s, BigDecimal rate, BigDecimal wht, BigDecimal income) {
         String book = String.valueOf(v.payDate.getYear() + 543);
         Number n = (Number) em.createNativeQuery("""
                         insert into doc_counters (prefix, period, last_no) values ('WHT', ?1, 1)
@@ -449,7 +454,8 @@ public class ApService {
                 : rate.compareTo(new BigDecimal("5")) == 0 ? "ค่าเช่า (มาตรา 3 เตรส)" : "เงินได้ตามมาตรา 3 เตรส";
         c.whtRate = rate;
         c.whtAmount = Money.round2(wht);
-        c.amount = ApCalculator.incomeFromWht(c.whtAmount, rate);
+        // เงินได้จริงก่อน VAT ที่จ่ายครั้งนี้ (ไม่ย้อนจาก WHT ที่ปัดเศษแล้ว)
+        c.amount = Money.round2(income);
         c.persist();
     }
 
@@ -472,10 +478,12 @@ public class ApService {
             if (amount.compareTo(b.outstanding()) > 0) {
                 throw ApiException.badRequest("over_payment", "บิล " + b.docNo + " ค้างจ่ายเพียง " + b.outstanding().toPlainString() + " บาท");
             }
-            BigDecimal wht = ApCalculator.whtPortion(amount, b.payableGross(), b.whtAmount, priorWht(b.id),
-                    amount.compareTo(b.outstanding()) == 0);
-            em.createNativeQuery("insert into payment_voucher_lines (pv_id, bill_id, amount, wht_amount) values (?1, ?2, ?3, ?4)")
-                    .setParameter(1, v.id).setParameter(2, b.id).setParameter(3, amount).setParameter(4, wht).executeUpdate();
+            boolean isFinal = amount.compareTo(b.outstanding()) == 0;
+            BigDecimal wht = ApCalculator.whtPortion(amount, b.payableGross(), b.whtAmount, priorWht(b.id), isFinal);
+            BigDecimal income = ApCalculator.incomePortion(amount, b.payableGross(), whtBase(b), priorIncome(b.id), isFinal);
+            em.createNativeQuery("insert into payment_voucher_lines (pv_id, bill_id, amount, wht_amount, income_amount) values (?1, ?2, ?3, ?4, ?5)")
+                    .setParameter(1, v.id).setParameter(2, b.id).setParameter(3, amount).setParameter(4, wht)
+                    .setParameter(5, income).executeUpdate();
             gross = gross.add(amount);
             whtTotal = whtTotal.add(wht);
         }
@@ -488,6 +496,66 @@ public class ApService {
         return SqlValues.decimal0(em.createNativeQuery("""
                         select coalesce(sum(l.wht_amount), 0) from payment_voucher_lines l join payment_vouchers v on v.id = l.pv_id
                         where l.bill_id = ?1 and v.status = 'paid' and v.deleted_at is null""").setParameter(1, billId).getSingleResult());
+    }
+
+    private BigDecimal priorIncome(UUID billId) {
+        return SqlValues.decimal0(em.createNativeQuery("""
+                        select coalesce(sum(l.income_amount), 0) from payment_voucher_lines l join payment_vouchers v on v.id = l.pv_id
+                        where l.bill_id = ?1 and v.status = 'paid' and v.deleted_at is null""").setParameter(1, billId).getSingleResult());
+    }
+
+    /** ฐานเงินได้ของบิลสำหรับหัก ณ ที่จ่าย (รวมเงินก่อน VAT) ; 0 ถ้าไม่หัก */
+    private static BigDecimal whtBase(ApBill b) {
+        return b.whtAmount.signum() == 0 ? BigDecimal.ZERO : b.subtotal;
+    }
+
+    /**
+     * บิลถูกยกเลิก/ลบ: งวดเบิกกลับเป็นร่าง (ตรวจรับ/ตั้งหนี้ใหม่ได้) ; บิลคืนเงินประกันคืนยอดเงินประกันที่กันไว้
+     */
+    private void unlinkSubcontract(ApBill b) {
+        if (b.subcontractClaimId != null) {
+            if (b.subcontractId != null && b.retentionAmount.signum() > 0) {
+                em.createNativeQuery("select id from subcontracts where id = ?1 for update").setParameter(1, b.subcontractId).getResultList();
+                BigDecimal heldAfter = SqlValues.decimal0(em.createNativeQuery("""
+                                select coalesce((select sum(retention_amount) from ap_bills where subcontract_id = ?1
+                                       and subcontract_claim_id is not null and status <> 'void' and deleted_at is null and id <> ?2), 0)
+                                       - (select retention_released from subcontracts where id = ?1)""")
+                        .setParameter(1, b.subcontractId).setParameter(2, b.id).getSingleResult());
+                if (heldAfter.signum() < 0) {
+                    throw ApiException.conflict("retention_released", "คืนเงินประกันของสัญญานี้ไปแล้ว ต้องยกเลิกบิลคืนเงินประกันก่อน");
+                }
+            }
+            em.createNativeQuery("""
+                            update subcontract_claims set status = 'draft', ap_bill_id = null, approved_by = null, approved_at = null
+                            where id = ?1 and (ap_bill_id is null or ap_bill_id = ?2)""")
+                    .setParameter(1, b.subcontractClaimId).setParameter(2, b.id).executeUpdate();
+        } else if (b.subcontractId != null) {
+            em.createNativeQuery("update subcontracts set retention_released = greatest(retention_released - ?1, 0) where id = ?2")
+                    .setParameter(1, b.subtotal).setParameter(2, b.subcontractId).executeUpdate();
+        }
+    }
+
+    private ApBill lockBill(UUID id) {
+        ApBill b = id == null ? null : ApBill.findById(id, LockModeType.PESSIMISTIC_WRITE);
+        if (b == null) {
+            throw ApiException.notFound("ไม่พบบิล");
+        }
+        return b;
+    }
+
+    /** ล็อกบิลทุกใบในใบสำคัญจ่าย (เรียงตาม id กัน deadlock) */
+    private Map<UUID, ApBill> lockBills(List<Object[]> lines) {
+        Map<UUID, ApBill> out = new LinkedHashMap<>();
+        lines.stream().map(l -> SqlValues.uuid(l[0])).sorted().forEach(bid -> out.put(bid, lockBill(bid)));
+        return out;
+    }
+
+    private PaymentVoucher lockPv(UUID id) {
+        PaymentVoucher v = id == null ? null : PaymentVoucher.findById(id, LockModeType.PESSIMISTIC_WRITE);
+        if (v == null) {
+            throw ApiException.notFound("ไม่พบใบสำคัญจ่าย");
+        }
+        return v;
     }
 
     @SuppressWarnings("unchecked")

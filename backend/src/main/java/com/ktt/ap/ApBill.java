@@ -31,6 +31,8 @@ public class ApBill extends BaseEntity {
     public UUID projectId;
     public UUID poId;
     public UUID subcontractClaimId;
+    /** สัญญาจ้างช่วงที่บิลนี้ผูกอยู่ (งวดเบิก หรือ คืนเงินประกันเมื่อ subcontractClaimId ว่าง) */
+    public UUID subcontractId;
     public String category = "material";
     public BigDecimal subtotal = BigDecimal.ZERO;
     public BigDecimal vatPct = new BigDecimal("7.00");

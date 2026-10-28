@@ -189,6 +189,9 @@ public class LaborService {
     public List<WageLine> preview(LocalDate from, LocalDate to, UUID projectId) {
         requireRead();
         checkRange(from, to);
+        if (projectId != null) {
+            projects.requireVisible(projectId);
+        }
         return lines(null, from, to, projectId);
     }
 
@@ -220,10 +223,15 @@ public class LaborService {
                 .setParameter(1, id).setParameter(2, docNo).setParameter(3, from).setParameter(4, to).setParameter(5, projectId)
                 .setParameter(6, Money.round2(total)).setParameter(7, UserNames.blankToNull(notes)).setParameter(8, currentUser.id())
                 .executeUpdate();
-        em.createNativeQuery("""
+        List<UUID> visible = projectId == null ? visibleScope() : null;
+        var upd = em.createNativeQuery("""
                         update timesheets set wage_payment_id = ?1 where wage_payment_id is null and work_date between ?2 and ?3
-                        and (cast(?4 as uuid) is null or project_id = ?4)""")
-                .setParameter(1, id).setParameter(2, from).setParameter(3, to).setParameter(4, projectId).executeUpdate();
+                        and (cast(?4 as uuid) is null or project_id = ?4)""" + (visible == null ? "" : " and project_id in (?5)"))
+                .setParameter(1, id).setParameter(2, from).setParameter(3, to).setParameter(4, projectId);
+        if (visible != null) {
+            upd.setParameter(5, visible);
+        }
+        upd.executeUpdate();
         audit.log("wage_payment", id, AuditService.ACTION_CREATE, null, Map.of("docNo", docNo, "total", total));
         return toDto(id);
     }
@@ -257,6 +265,11 @@ public class LaborService {
     private List<WageLine> lines(UUID paymentId, LocalDate from, LocalDate to, UUID projectId) {
         String where = paymentId != null ? "t.wage_payment_id = :pay"
                 : "t.wage_payment_id is null and t.work_date between :from and :to" + (projectId == null ? "" : " and t.project_id = :project");
+        // ไม่ระบุโครงการ: จำกัดเฉพาะโครงการที่ผู้ใช้เห็น (ยกเว้นมีสิทธิ์ดูทุกโครงการ)
+        List<UUID> visible = paymentId == null && projectId == null ? visibleScope() : null;
+        if (visible != null) {
+            where += " and t.project_id in (:visible)";
+        }
         var q = em.createNativeQuery("""
                         select w.id, w.name, w.trade, sum(t.days), sum(t.ot_hours), sum(t.wage) from timesheets t join workers w on w.id = t.worker_id
                         where """ + where + " group by w.id, w.name, w.trade order by w.name");
@@ -266,6 +279,9 @@ public class LaborService {
             q.setParameter("from", from).setParameter("to", to);
             if (projectId != null) {
                 q.setParameter("project", projectId);
+            }
+            if (visible != null) {
+                q.setParameter("visible", visible);
             }
         }
         @SuppressWarnings("unchecked")
@@ -287,6 +303,11 @@ public class LaborService {
         return new WagePaymentDto(SqlValues.uuid(r[0]), (String) r[1], SqlValues.date(r[2]), SqlValues.date(r[3]), SqlValues.uuid(r[4]),
                 (String) r[5], SqlValues.decimal0(r[6]), SqlValues.date(r[7]), (String) r[8], (String) r[9],
                 lines(id, null, null, null), (String) r[10]);
+    }
+
+    /** null = เห็นทุกโครงการ ; ไม่งั้นคืน id โครงการที่ผู้ใช้เห็น */
+    private List<UUID> visibleScope() {
+        return currentUser.can(Perm.PROJECT_READ_ALL) ? null : projects.visibleProjectIds();
     }
 
     private static void checkRange(LocalDate from, LocalDate to) {

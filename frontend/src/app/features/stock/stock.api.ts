@@ -20,7 +20,8 @@ export interface Warehouse {
   projectCode: string | null;
   projectName: string | null;
   active: boolean;
-  stockValue: number;
+  /** null เมื่อไม่มีสิทธิ์ดูต้นทุน */
+  stockValue: number | null;
 }
 
 export interface OnHand {
@@ -43,14 +44,14 @@ export interface LedgerRow {
   date: string;
   kind: string;
   qty: number;
-  unitCost: number;
+  unitCost: number | null;
   refType: string;
   refId: string;
   refNo: string | null;
   projectCode: string | null;
   note: string | null;
   balance: number;
-  balanceValue: number;
+  balanceValue: number | null;
 }
 
 export interface StockDoc {
@@ -63,8 +64,8 @@ export interface StockDoc {
   projectCode: string | null;
   notes: string | null;
   createdByName: string | null;
-  value: number;
-  lines: { materialId: string; code: string; name: string; unit: string; qty: number; unitCost: number; note: string | null }[];
+  value: number | null;
+  lines: { materialId: string; code: string; name: string; unit: string; qty: number; unitCost: number | null; note: string | null }[];
 }
 
 export interface StockDocSave {
