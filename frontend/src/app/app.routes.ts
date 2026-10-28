@@ -335,6 +335,53 @@ export const routes: Routes = [
         loadComponent: () => import('./features/reports/cashflow.page').then((m) => m.CashflowPage),
       },
       {
+        path: 'dashboard',
+        canActivate: [permissionGuard(Perm.DASHBOARD_VIEW)],
+        title: 'แดชบอร์ดผู้บริหาร | KTT',
+        loadComponent: () => import('./features/dashboard/dashboard.page').then((m) => m.DashboardPage),
+      },
+      {
+        path: 'calendar',
+        title: 'ปฏิทิน | KTT',
+        loadComponent: () => import('./features/calendar/calendar.page').then((m) => m.CalendarPage),
+      },
+      {
+        path: 'permits',
+        canActivate: [permissionGuard(Perm.PERMIT_READ, Perm.PERMIT_WRITE)],
+        title: 'ใบอนุญาต | KTT',
+        loadComponent: () => import('./features/permits/permits.page').then((m) => m.PermitsPage),
+      },
+      {
+        path: 'service/tickets',
+        canActivate: [permissionGuard(Perm.SERVICE_READ, Perm.SERVICE_WRITE)],
+        title: 'งานแจ้งซ่อม | KTT',
+        loadComponent: () => import('./features/service/tickets.page').then((m) => m.TicketsPage),
+      },
+      {
+        path: 'service/tickets/:id',
+        canActivate: [permissionGuard(Perm.SERVICE_READ, Perm.SERVICE_WRITE)],
+        title: 'งานแจ้งซ่อม | KTT',
+        loadComponent: () => import('./features/service/ticket.page').then((m) => m.TicketPage),
+      },
+      {
+        path: 'service/warranty',
+        canActivate: [permissionGuard(Perm.SERVICE_READ, Perm.SERVICE_WRITE)],
+        title: 'รับประกันผลงาน | KTT',
+        loadComponent: () => import('./features/service/warranty.page').then((m) => m.WarrantyPage),
+      },
+      {
+        path: 'service/satisfaction',
+        canActivate: [permissionGuard(Perm.SERVICE_READ, Perm.SERVICE_WRITE)],
+        title: 'ความพึงพอใจลูกค้า | KTT',
+        loadComponent: () => import('./features/service/satisfaction.page').then((m) => m.SatisfactionPage),
+      },
+      {
+        path: 'admin/backup',
+        canActivate: [permissionGuard(Perm.BACKUP_MANAGE)],
+        title: 'สำรองข้อมูล | KTT',
+        loadComponent: () => import('./features/backup/backup.page').then((m) => m.BackupPage),
+      },
+      {
         path: 'settings',
         title: 'ตั้งค่า | KTT',
         loadComponent: () => import('./features/settings/settings.page').then((m) => m.SettingsPage),

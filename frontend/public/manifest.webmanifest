@@ -1,0 +1,22 @@
+{
+  "name": "KTT ระบบหลังบ้าน",
+  "short_name": "KTT",
+  "description": "ระบบหลังบ้านงานรับเหมาก่อสร้าง: ใบเสนอราคา โครงการ หน้างาน การเงิน จัดซื้อ และงานหลังการขาย",
+  "lang": "th",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f5f4",
+  "theme_color": "#1e3a4c",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "รายงานประจำวัน", "url": "/projects", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "รับแจ้งซ่อม", "url": "/service/tickets", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "ปฏิทิน", "url": "/calendar", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

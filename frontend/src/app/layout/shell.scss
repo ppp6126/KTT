@@ -172,3 +172,29 @@
     display: none;
   }
 }
+
+.offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  background: #fdeedd;
+  color: #9a4b05;
+  font-size: 0.85rem;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .offline {
+    font-size: 0;
+    gap: 0;
+    padding: 4px 6px;
+  }
+}

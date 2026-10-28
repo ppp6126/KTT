@@ -11,6 +11,7 @@ import { map } from 'rxjs';
 import { Perm } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 import { NotificationBell } from './notification-bell';
+import { PwaService } from '../core/pwa/pwa.service';
 
 interface NavItem {
   label: string;
@@ -27,7 +28,14 @@ interface NavGroup {
 }
 
 const NAV: NavGroup[] = [
-  { label: null, items: [{ label: 'หน้าแรก', icon: 'home', link: '/', exact: true }] },
+  {
+    label: null,
+    items: [
+      { label: 'หน้าแรก', icon: 'home', link: '/', exact: true },
+      { label: 'แดชบอร์ดผู้บริหาร', icon: 'monitoring', link: '/dashboard', perm: Perm.DASHBOARD_VIEW },
+      { label: 'ปฏิทิน', icon: 'calendar_month', link: '/calendar' },
+    ],
+  },
   {
     label: 'งานขาย',
     items: [
@@ -55,6 +63,15 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    label: 'หลังการขาย',
+    items: [
+      { label: 'งานแจ้งซ่อม', icon: 'home_repair_service', link: '/service/tickets', perm: [Perm.SERVICE_READ, Perm.SERVICE_WRITE] },
+      { label: 'รับประกันผลงาน', icon: 'verified_user', link: '/service/warranty', perm: [Perm.SERVICE_READ, Perm.SERVICE_WRITE] },
+      { label: 'ความพึงพอใจ', icon: 'sentiment_satisfied', link: '/service/satisfaction', perm: [Perm.SERVICE_READ, Perm.SERVICE_WRITE] },
+      { label: 'ใบอนุญาต/เอกสาร', icon: 'assignment_late', link: '/permits', perm: [Perm.PERMIT_READ, Perm.PERMIT_WRITE] },
+    ],
+  },
+  {
     label: 'จัดซื้อและคลัง',
     items: [
       { label: 'จัดซื้อ', icon: 'shopping_cart', link: '/purchase', perm: [Perm.PURCHASE_REQUEST, Perm.PURCHASE_READ] },
@@ -78,6 +95,7 @@ const NAV: NavGroup[] = [
       { label: 'ผู้ใช้งาน', icon: 'group', link: '/admin/users', perm: Perm.USER_READ },
       { label: 'บทบาทและสิทธิ์', icon: 'admin_panel_settings', link: '/admin/roles', perm: Perm.ROLE_MANAGE },
       { label: 'ประวัติการใช้งาน', icon: 'history', link: '/admin/audit', perm: Perm.AUDIT_READ },
+      { label: 'สำรองข้อมูล', icon: 'backup', link: '/admin/backup', perm: Perm.BACKUP_MANAGE },
       { label: 'ตั้งค่า', icon: 'settings', link: '/settings', perm: Perm.SETTINGS_MANAGE },
     ],
   },
@@ -101,6 +119,7 @@ const NAV: NavGroup[] = [
 })
 export class Shell {
   readonly auth = inject(AuthService);
+  readonly pwa = inject(PwaService);
   readonly isNarrow = toSignal(
     inject(BreakpointObserver)
       .observe('(max-width: 960px)')
