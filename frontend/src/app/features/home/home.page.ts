@@ -1,9 +1,10 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { Perm } from '../../core/auth/auth.models';
 import { AuthService } from '../../core/auth/auth.service';
-import { ThDatePipe } from '../../core/util/format';
+import { ThDatePipe, addDaysIso, thDateShort, todayIso } from '../../core/util/format';
+import { CAL_SOURCES, CalItem, CalendarApi } from '../calendar/calendar.api';
 
 interface Shortcut {
   title: string;
@@ -14,6 +15,8 @@ interface Shortcut {
 }
 
 const SHORTCUTS: Shortcut[] = [
+  { title: 'แดชบอร์ดผู้บริหาร', text: 'ยอดขาย ต้นทุน กำไร ลูกหนี้ เจ้าหนี้ โครงการที่ต้องจับตา', icon: 'monitoring', link: '/dashboard', perm: Perm.DASHBOARD_VIEW },
+  { title: 'รับแจ้งซ่อม', text: 'บันทึกงานซ่อม ตรวจระยะรับประกัน นัดช่าง', icon: 'home_repair_service', link: '/service/tickets', perm: Perm.SERVICE_WRITE },
   { title: 'ลูกค้า', text: 'ทะเบียนลูกค้า ข้อมูลออกใบกำกับภาษี และผู้ติดต่อ', icon: 'contacts', link: '/customers', perm: Perm.CUSTOMER_READ },
   { title: 'ผู้ใช้งาน', text: 'เพิ่มพนักงาน กำหนดบทบาท รีเซ็ตรหัสผ่าน', icon: 'group', link: '/admin/users', perm: Perm.USER_READ },
   { title: 'บทบาทและสิทธิ์', text: 'กำหนดว่าใครเห็นต้นทุน ใครอนุมัติส่วนลดได้', icon: 'admin_panel_settings', link: '/admin/roles', perm: Perm.ROLE_MANAGE },
@@ -45,6 +48,25 @@ const SHORTCUTS: Shortcut[] = [
           </a>
         }
       }
+
+      <section class="panel week">
+        <div class="week-head">
+          <h2>7 วันข้างหน้า</h2>
+          <a routerLink="/calendar">เปิดปฏิทิน</a>
+        </div>
+        @for (it of week(); track it.id) {
+          <a class="w-item" [routerLink]="it.link ?? '/calendar'">
+            <span class="d">{{ day(it.date) }}</span>
+            <i [style.background]="color(it.source)"></i>
+            <span class="t">{{ it.title }}<span class="muted">{{ it.subtitle ? ' · ' + it.subtitle : '' }}</span></span>
+          </a>
+        } @empty {
+          <p class="muted">ไม่มีนัดหมายหรือกำหนดการ</p>
+        }
+        @if (more() > 0) {
+          <p class="muted small">และอีก {{ more() }} รายการ</p>
+        }
+      </section>
 
       <div class="grid">
         @for (s of shortcuts(); track s.link) {
@@ -90,6 +112,55 @@ const SHORTCUTS: Shortcut[] = [
       }
     }
 
+    .week {
+      padding: 14px 18px;
+      margin-bottom: 16px;
+    }
+
+    .week-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      h2 {
+        margin: 0 0 6px;
+      }
+    }
+
+    .w-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 0;
+      border-top: 1px solid #eceeed;
+      color: inherit;
+      text-decoration: none;
+
+      .d {
+        width: 76px;
+        flex: none;
+        color: var(--ktt-steel);
+        font-size: 0.85rem;
+      }
+
+      i {
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        flex: none;
+      }
+
+      .t {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      &:hover .t {
+        text-decoration: underline;
+      }
+    }
+
     .notice {
       display: flex;
       align-items: center;
@@ -106,8 +177,26 @@ const SHORTCUTS: Shortcut[] = [
     }
   `,
 })
-export class HomePage {
+export class HomePage implements OnInit {
   readonly auth = inject(AuthService);
+  private readonly calendar = inject(CalendarApi);
+  private readonly items = signal<CalItem[]>([]);
+  readonly week = computed(() => this.items().slice(0, 8));
+  readonly more = computed(() => Math.max(0, this.items().length - 8));
+
+  ngOnInit(): void {
+    const t = todayIso();
+    this.calendar.items(t, addDaysIso(t, 6)).subscribe({ next: (r) => this.items.set(r), error: () => this.items.set([]) });
+  }
+
+  day(iso: string): string {
+    return iso === todayIso() ? 'วันนี้' : thDateShort(iso);
+  }
+
+  color(source: string): string {
+    return CAL_SOURCES.find((s) => s.key === source)?.color ?? '#888';
+  }
+
   readonly shortcuts = computed(() => {
     const perms = this.auth.permissions();
     return SHORTCUTS.filter((s) => perms.has(s.perm));

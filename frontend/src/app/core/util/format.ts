@@ -134,6 +134,11 @@ export const ENTITY_LABEL: Record<string, string> = {
   wage_payment: 'ใบสรุปค่าแรง',
   ap_bill: 'ใบตั้งหนี้',
   payment_voucher: 'ใบสำคัญจ่าย',
+  permit: 'ใบอนุญาต/เอกสาร',
+  service_ticket: 'งานแจ้งซ่อม',
+  satisfaction_survey: 'ความพึงพอใจ',
+  calendar_event: 'นัดหมาย',
+  backup: 'สำรองข้อมูล',
 };
 
 /** วันนี้ตามเวลาเครื่องในรูปแบบ yyyy-mm-dd (ใช้กับ input type=date) */

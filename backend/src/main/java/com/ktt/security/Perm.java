@@ -72,4 +72,11 @@ public final class Perm {
     public static final String AP_WRITE = "ap.write";
     public static final String AP_APPROVE = "ap.approve";
     public static final String TAX_REPORT = "tax.report";
+
+    public static final String DASHBOARD_VIEW = "dashboard.view";
+    public static final String PERMIT_READ = "permit.read";
+    public static final String PERMIT_WRITE = "permit.write";
+    public static final String SERVICE_READ = "service.read";
+    public static final String SERVICE_WRITE = "service.write";
+    public static final String BACKUP_MANAGE = "backup.manage";
 }

@@ -29,6 +29,8 @@ public class Project extends BaseEntity {
     public LocalDate plannedEnd;
     public LocalDate actualStart;
     public LocalDate actualEnd;
+    /** กำหนดวันสิ้นสุดรับประกันเอง (null = วันส่งมอบจริง + ระยะรับประกันในสัญญา) */
+    public LocalDate warrantyUntil;
     public UUID managerId;
     public UUID foremanId;
     public BigDecimal budgetCost;

@@ -100,4 +100,10 @@ export const Perm = {
   AP_WRITE: 'ap.write',
   AP_APPROVE: 'ap.approve',
   TAX_REPORT: 'tax.report',
+  DASHBOARD_VIEW: 'dashboard.view',
+  PERMIT_READ: 'permit.read',
+  PERMIT_WRITE: 'permit.write',
+  SERVICE_READ: 'service.read',
+  SERVICE_WRITE: 'service.write',
+  BACKUP_MANAGE: 'backup.manage',
 } as const;

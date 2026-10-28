@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -49,6 +49,9 @@ interface TaskEntry {
           }
         </div>
 
+        @if (restored()) {
+          <p class="notice warn" role="status">กู้ข้อมูลที่ยังไม่ได้บันทึกจากเครื่องนี้แล้ว ตรวจสอบแล้วกดบันทึก</p>
+        }
         @if (report()?.status === 'submitted' || report()?.status === 'acknowledged') {
           <p class="muted small">
             ส่งโดย {{ report()!.submittedByName }} {{ report()!.submittedAt | thDate: true }}
@@ -220,7 +223,7 @@ interface TaskEntry {
     }
   `,
 })
-export class DailyReportPage implements OnInit {
+export class DailyReportPage implements OnInit, OnDestroy {
   private readonly api = inject(ProjectsApi);
   private readonly notify = inject(Notify);
   private readonly router = inject(Router);
@@ -240,6 +243,9 @@ export class DailyReportPage implements OnInit {
   readonly st = DAILY_STATUS;
   readonly weathers = Object.entries(WEATHER);
   readonly today = todayIso();
+  readonly restored = signal(false);
+  private timer?: ReturnType<typeof setInterval>;
+  private readonly stashFn = () => this.stash();
 
   m: DailyReportSave = {
     reportDate: todayIso(),
@@ -279,6 +285,64 @@ export class DailyReportPage implements OnInit {
       });
       this.loadTasks(this.projectId()!, null);
     }
+    // เก็บร่างในเครื่องทุก 10 วินาที และตอนปิด/สลับแอป กันข้อมูลหายเมื่อสัญญาณหน้างานหลุด
+    this.timer = setInterval(this.stashFn, 10_000);
+    window.addEventListener('pagehide', this.stashFn);
+    document.addEventListener('visibilitychange', this.stashFn);
+  }
+
+  ngOnDestroy(): void {
+    clearInterval(this.timer);
+    this.stash();
+    window.removeEventListener('pagehide', this.stashFn);
+    document.removeEventListener('visibilitychange', this.stashFn);
+  }
+
+  private draftKey(): string {
+    return 'ktt.daily-draft.' + (this.report()?.id ?? this.reportId() ?? 'new-' + this.projectId());
+  }
+
+  /** สิ่งที่ผู้ใช้กรอก (ใช้เทียบว่ามีอะไรยังไม่บันทึก) */
+  private snapshot(): string {
+    return JSON.stringify({ m: this.m, entries: this.entries().map((e) => ({ taskId: e.task.id, pct: e.pct, note: e.note })) });
+  }
+
+  private baseline = '';
+
+  private stash(): void {
+    if (!this.ready() || !this.editable() || this.busy()) return;
+    const snap = this.snapshot();
+    if (snap === this.baseline) return;
+    try {
+      localStorage.setItem(this.draftKey(), JSON.stringify({ at: Date.now(), ...JSON.parse(snap) }));
+    } catch {
+      // เบราว์เซอร์ไม่ให้ใช้พื้นที่เก็บ (โหมดส่วนตัว) ข้ามได้
+    }
+  }
+
+  private clearDraft(...keys: string[]): void {
+    try {
+      for (const k of keys) localStorage.removeItem(k);
+    } catch {
+      // ไม่มีพื้นที่เก็บ ไม่เป็นไร
+    }
+  }
+
+  private restore(): void {
+    if (!this.editable()) return;
+    try {
+      const raw = localStorage.getItem(this.draftKey());
+      if (!raw) return;
+      const d = JSON.parse(raw) as { at: number; m: DailyReportSave; entries: { taskId: string; pct: number | null; note: string }[] };
+      if (!this.report() && d.m.reportDate !== this.m.reportDate) return;
+      this.m = { ...this.m, ...d.m };
+      const map = new Map(d.entries.map((e) => [e.taskId, e]));
+      this.entries.set(this.entries().map((e) => (map.has(e.task.id) ? { ...e, pct: map.get(e.task.id)!.pct, note: map.get(e.task.id)!.note } : e)));
+      this.restored.set(true);
+      this.tick();
+    } catch {
+      // ร่างเสียหาย ข้าม
+    }
   }
 
   private loadTasks(projectId: string, r: DailyReport | null): void {
@@ -290,6 +354,8 @@ export class DailyReportPage implements OnInit {
         const active = (t: Task) => (t.plannedStart && t.plannedStart <= this.m.reportDate && (!t.plannedEnd || t.plannedEnd >= this.m.reportDate) ? 0 : 1);
         leaves.sort((a, b) => active(a) - active(b) || a.sortOrder - b.sortOrder);
         this.entries.set(leaves.map((t) => ({ task: t, pct: set.get(t.id)?.progressPct ?? null, note: set.get(t.id)?.note ?? '' })));
+        this.baseline = this.snapshot();
+        this.restore();
         this.ready.set(true);
       },
       error: (e) => {
@@ -360,9 +426,13 @@ export class DailyReportPage implements OnInit {
       return;
     }
     this.busy.set(true);
+    const key = this.draftKey();
     const req = r ? this.api.updateDaily(r.id, this.body()) : this.api.createDaily(this.projectId()!, this.body());
     req.subscribe({
       next: (saved) => {
+        this.clearDraft(key, 'ktt.daily-draft.' + saved.id);
+        this.restored.set(false);
+        this.baseline = this.snapshot();
         if (submit) {
           this.api.submitDaily(saved.id).subscribe({
             next: (s) => {
@@ -384,12 +454,18 @@ export class DailyReportPage implements OnInit {
           this.router.navigate(['/daily-reports', saved.id], { replaceUrl: true });
         }
         this.apply(saved);
+        this.baseline = this.snapshot();
       },
       error: (e) => {
         this.busy.set(false);
         if (errorCode(e) === 'report_exists' && e instanceof HttpErrorResponse && e.error?.details?.id) {
           this.notify.error(e, 'มีรายงานของวันนี้แล้ว กำลังเปิดฉบับเดิม');
           this.router.navigate(['/daily-reports', e.error.details.id]);
+          return;
+        }
+        if (e instanceof HttpErrorResponse && e.status === 0) {
+          this.stash();
+          this.notify.error(null, 'ไม่มีสัญญาณ ข้อมูลเก็บไว้ในเครื่องนี้แล้ว กดบันทึกอีกครั้งเมื่อมีสัญญาณ');
           return;
         }
         this.notify.error(e);

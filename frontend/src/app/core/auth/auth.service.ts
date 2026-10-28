@@ -121,6 +121,14 @@ export class AuthService {
       .pipe(catchError(() => of(null)))
       .subscribe(() => {
         this.clear();
+        // ร่างรายงานที่ค้างในเครื่องเป็นของผู้ใช้คนนี้ ลบเมื่อออกจากระบบ (เครื่องอาจใช้ร่วมกัน)
+        try {
+          Object.keys(localStorage)
+            .filter((k) => k.startsWith('ktt.daily-draft.'))
+            .forEach((k) => localStorage.removeItem(k));
+        } catch {
+          // ไม่มีพื้นที่เก็บ ข้ามได้
+        }
         this.signedOutReason.set(reason ?? null);
         this.channel?.postMessage('logout');
         this.router.navigate(['/login']);
