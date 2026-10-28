@@ -272,7 +272,7 @@ public class LaborService {
         }
         var q = em.createNativeQuery("""
                         select w.id, w.name, w.trade, sum(t.days), sum(t.ot_hours), sum(t.wage) from timesheets t join workers w on w.id = t.worker_id
-                        where """ + where + " group by w.id, w.name, w.trade order by w.name");
+                        where """ + " " + where + " group by w.id, w.name, w.trade order by w.name");
         if (paymentId != null) {
             q.setParameter("pay", paymentId);
         } else {

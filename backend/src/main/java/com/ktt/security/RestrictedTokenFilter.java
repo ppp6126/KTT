@@ -20,7 +20,7 @@ public class RestrictedTokenFilter {
     @Inject
     SecurityIdentity identity;
 
-    @ServerRequestFilter
+    @ServerRequestFilter(preMatching = true) // ต้องทำงานก่อนการตรวจ @RolesAllowed ไม่งั้นได้ 403 ทั่วไปแทน code ที่ frontend ใช้
     public Response check(ContainerRequestContext ctx) {
         if (identity.isAnonymous() || !(identity.getPrincipal() instanceof JsonWebToken jwt)) {
             return null;
