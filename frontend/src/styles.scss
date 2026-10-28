@@ -243,3 +243,14 @@ h3 { font-size: 1rem; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- หน้าพิมพ์เอกสาร */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+}

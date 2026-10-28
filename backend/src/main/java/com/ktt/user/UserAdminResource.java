@@ -54,6 +54,16 @@ public class UserAdminResource {
         return users.list(q, roleId, active, page, size);
     }
 
+    /** รายชื่อผู้ใช้ที่ใช้งานอยู่ (สำหรับเลือกผู้รับผิดชอบ) ทุกคนที่ login แล้วเรียกได้ */
+    @GET
+    @Path("/users/options")
+    @io.quarkus.security.Authenticated
+    @jakarta.transaction.Transactional
+    public List<java.util.Map<String, Object>> options() {
+        List<com.ktt.auth.User> list = com.ktt.auth.User.list("active = true order by name");
+        return list.stream().map(u -> java.util.Map.<String, Object>of("id", u.id, "name", u.name, "role", u.role.name)).toList();
+    }
+
     @GET
     @Path("/users/{id}")
     @RolesAllowed(Perm.USER_READ)

@@ -1,0 +1,186 @@
+@if (detail(); as d) {
+  <div class="page">
+    <a routerLink="/leads" class="back"><mat-icon>arrow_back</mat-icon> ลีดทั้งหมด</a>
+
+    <div class="page-head">
+      <div>
+        <h1>{{ d.lead.title }}</h1>
+        <p>
+          <a [routerLink]="['/customers', d.lead.customerId]">{{ d.lead.customerName }}</a>
+          @if (d.lead.customerPhone) {
+            , {{ d.lead.customerPhone }}
+          }
+        </p>
+      </div>
+      <div class="actions">
+        @if (canWrite()) {
+          <mat-form-field class="status" subscriptSizing="dynamic">
+            <mat-label>สถานะ</mat-label>
+            <mat-select [value]="d.lead.status" (selectionChange)="setStatus($event.value)">
+              @for (s of statuses; track s.code) {
+                <mat-option [value]="s.code">{{ s.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <button mat-stroked-button (click)="edit()"><mat-icon>edit</mat-icon> แก้ไข</button>
+        }
+        <button *appCan="Perm.LEAD_DELETE" mat-icon-button [matMenuTriggerFor]="more" aria-label="เพิ่มเติม">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        <mat-menu #more="matMenu">
+          <button mat-menu-item (click)="remove()"><mat-icon>delete</mat-icon>ลบลีด</button>
+        </mat-menu>
+      </div>
+    </div>
+
+    <section class="panel panel-pad facts">
+      <div><span class="label">ประเภทงาน</span>{{ jobTypes[d.lead.jobType] }}</div>
+      <div><span class="label">งบประมาณลูกค้า</span>{{ d.lead.budgetEst ? (d.lead.budgetEst | money) + ' บาท' : '–' }}</div>
+      <div><span class="label">ผู้รับผิดชอบ</span>{{ d.lead.ownerName || '–' }}</div>
+      <div><span class="label">นัดติดตามผล</span>{{ d.lead.nextFollowupAt | thDate }}</div>
+      <div class="wide"><span class="label">ที่ตั้งไซต์งาน</span>{{ d.lead.siteAddress || '–' }}</div>
+      @if (d.lead.status === 'lost' && d.lostReason) {
+        <div class="wide lost"><span class="label">เหตุผลที่ไม่ได้งาน</span>{{ d.lostReason }}</div>
+      }
+    </section>
+
+    <mat-tab-group animationDuration="0ms" class="tabs">
+      <mat-tab label="ประวัติการติดต่อ">
+        <div class="tab-body">
+          @if (canWrite()) {
+            <div class="act-form">
+              <mat-button-toggle-group [(ngModel)]="actType" aria-label="ประเภทกิจกรรม">
+                <mat-button-toggle value="call">โทร</mat-button-toggle>
+                <mat-button-toggle value="visit">ดูไซต์</mat-button-toggle>
+                <mat-button-toggle value="meeting">ประชุม</mat-button-toggle>
+                <mat-button-toggle value="note">บันทึก</mat-button-toggle>
+              </mat-button-toggle-group>
+              <mat-form-field class="note">
+                <mat-label>รายละเอียด</mat-label>
+                <textarea matInput rows="2" [(ngModel)]="actNote" placeholder="เช่น ลูกค้าขอปรับแบบห้องครัวให้กว้างขึ้น 1 ม."></textarea>
+              </mat-form-field>
+              <button mat-flat-button (click)="addActivity()" [disabled]="actBusy || !actNote.trim()">บันทึก</button>
+            </div>
+          }
+          <ol class="timeline">
+            @for (a of d.activities; track a.id) {
+              <li [class.system]="a.type === 'status_change'">
+                <mat-icon>{{ activityTypes[a.type]?.icon || 'circle' }}</mat-icon>
+                <div class="grow">
+                  <div class="when muted">
+                    {{ activityTypes[a.type]?.label }}, {{ a.occurredAt | thDate: true }}
+                    @if (a.createdByName) {
+                      โดย {{ a.createdByName }}
+                    }
+                  </div>
+                  <div class="text">{{ a.note }}</div>
+                </div>
+                @if (canWrite() && a.type !== 'status_change' && a.createdBy === auth.user()?.id) {
+                  <button mat-icon-button (click)="deleteActivity(a.id)" aria-label="ลบกิจกรรม"><mat-icon>close</mat-icon></button>
+                }
+              </li>
+            } @empty {
+              <li class="muted">ยังไม่มีการบันทึก</li>
+            }
+          </ol>
+        </div>
+      </mat-tab>
+
+      <mat-tab [label]="'ไฟล์แนบ (' + d.attachmentCount + ')'">
+        <div class="tab-body">
+          <app-attachment-panel ownerType="lead" [ownerId]="d.lead.id" [canWrite]="canWrite() && auth.can(Perm.LEAD_WRITE)" defaultCategory="plan" />
+        </div>
+      </mat-tab>
+
+      @if (auth.can(Perm.BOQ_READ)) {
+        <mat-tab [label]="'BOQ (' + boqs().length + ')'">
+          <div class="tab-body">
+            @if (canBoq()) {
+              <div class="row-actions">
+                <button mat-flat-button (click)="newBoq()"><mat-icon>add</mat-icon> สร้าง BOQ</button>
+                @if (templates().length) {
+                  <button mat-stroked-button [matMenuTriggerFor]="tplMenu"><mat-icon>library_add</mat-icon> สร้างจากแม่แบบ</button>
+                  <mat-menu #tplMenu="matMenu">
+                    @for (t of templates(); track t.id) {
+                      <button mat-menu-item (click)="newBoq(t.id)">{{ t.name }}</button>
+                    }
+                  </mat-menu>
+                }
+              </div>
+            }
+            <table class="simple">
+              <thead>
+                <tr>
+                  <th>ชุด</th>
+                  <th class="num">ราคาขาย</th>
+                  @if (auth.can(Perm.COST_VIEW)) {
+                    <th class="num">Margin</th>
+                  }
+                  <th>แก้ไขล่าสุด</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (b of boqs(); track b.id) {
+                  <tr>
+                    <td>
+                      <a [routerLink]="['/boqs', b.id]">{{ b.name }}</a>
+                      <div class="muted small">{{ b.itemCount }} แถว</div>
+                    </td>
+                    <td class="num">{{ b.grandTotal | money }}</td>
+                    @if (auth.can(Perm.COST_VIEW)) {
+                      <td class="num">{{ b.marginPct === null ? '–' : b.marginPct + '%' }}</td>
+                    }
+                    <td>{{ b.updatedAt | thDate: true }}</td>
+                    <td class="num">
+                      <button mat-icon-button [matMenuTriggerFor]="bm" aria-label="ตัวเลือก BOQ"><mat-icon>more_vert</mat-icon></button>
+                      <mat-menu #bm="matMenu">
+                        <a mat-menu-item [routerLink]="['/boqs', b.id]"><mat-icon>edit</mat-icon>เปิด</a>
+                        @if (canBoq()) {
+                          <button mat-menu-item (click)="copyBoq(b)"><mat-icon>content_copy</mat-icon>คัดลอกเป็นทางเลือกใหม่</button>
+                        }
+                        @if (auth.can(Perm.QUOTATION_WRITE)) {
+                          <button mat-menu-item (click)="newQuotation(b.id, 'detailed')"><mat-icon>request_quote</mat-icon>ออกใบเสนอราคา (แสดงทุกรายการ)</button>
+                          <button mat-menu-item (click)="newQuotation(b.id, 'summary')"><mat-icon>request_quote</mat-icon>ออกใบเสนอราคา (สรุปตามหมวด)</button>
+                        }
+                      </mat-menu>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="5" class="muted">ยังไม่มี BOQ</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </mat-tab>
+      }
+
+      @if (auth.can(Perm.QUOTATION_READ)) {
+        <mat-tab [label]="'ใบเสนอราคา (' + quotations().length + ')'">
+          <div class="tab-body">
+            <div class="row-actions" *appCan="Perm.QUOTATION_WRITE">
+              <button mat-stroked-button (click)="newQuotation(null, 'manual')"><mat-icon>add</mat-icon> ใบเสนอราคาแบบกรอกเอง</button>
+            </div>
+            <table class="simple">
+              <thead>
+                <tr><th>เลขที่</th><th>วันที่</th><th>สถานะ</th><th class="num">ยอดสุทธิ</th></tr>
+              </thead>
+              <tbody>
+                @for (q of quotations(); track q.id) {
+                  <tr>
+                    <td><a [routerLink]="['/quotations', q.id]">{{ q.displayNo }}</a></td>
+                    <td>{{ q.issueDate | thDate }}</td>
+                    <td><span class="chip" [class]="qStatus[q.status].tone">{{ qStatus[q.status].label }}</span></td>
+                    <td class="num">{{ q.totalAmount | money }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="4" class="muted">ยังไม่มีใบเสนอราคา</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </mat-tab>
+      }
+    </mat-tab-group>
+  </div>
+}

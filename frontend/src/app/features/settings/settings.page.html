@@ -1,0 +1,123 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>ตั้งค่า</h1>
+      <p>ข้อมูลบริษัทบนหัวเอกสาร และค่าตั้งต้นของใบเสนอราคา</p>
+    </div>
+  </div>
+
+  @if (canBoq()) {
+    <section class="panel panel-pad section">
+      <h2>ข้อมูลสำหรับประมาณราคา</h2>
+      <div class="links">
+        <a mat-stroked-button routerLink="/boq-templates"><mat-icon>library_books</mat-icon> แม่แบบ BOQ</a>
+        <a mat-stroked-button routerLink="/settings/factor-f"><mat-icon>table_chart</mat-icon> ตาราง Factor F</a>
+        <a mat-stroked-button routerLink="/pricing"><mat-icon>sell</mat-icon> ฐานราคากลาง</a>
+      </div>
+    </section>
+  }
+
+  @if (company(); as c) {
+    <section class="panel panel-pad section">
+      <h2>ข้อมูลบริษัท</h2>
+      <div class="form-grid">
+        <mat-form-field class="span-2"><mat-label>ชื่อบริษัท (ไทย)</mat-label><input matInput [(ngModel)]="c.nameTh" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>ชื่อบริษัท (อังกฤษ)</mat-label><input matInput [(ngModel)]="c.nameEn" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>เลขประจำตัวผู้เสียภาษี</mat-label><input matInput [(ngModel)]="c.taxId" maxlength="13" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>สาขา</mat-label><input matInput [(ngModel)]="c.branchNo" maxlength="5" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>โทรศัพท์</mat-label><input matInput [(ngModel)]="c.phone" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field class="span-all"><mat-label>ที่อยู่</mat-label><input matInput [(ngModel)]="c.address" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>อีเมล</mat-label><input matInput [(ngModel)]="c.email" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>ผู้มีอำนาจลงนาม</mat-label><input matInput [(ngModel)]="c.signerName" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>ตำแหน่งผู้ลงนาม</mat-label><input matInput [(ngModel)]="c.signerTitle" [disabled]="!canManage()" /></mat-form-field>
+      </div>
+      <h3>บัญชีรับชำระเงิน (แสดงในกล่องรับชำระเงิน)</h3>
+      <div class="form-grid">
+        <mat-form-field><mat-label>ธนาคาร</mat-label><input matInput [(ngModel)]="c.bankName" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>สาขา</mat-label><input matInput [(ngModel)]="c.bankBranch" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>ชื่อบัญชี</mat-label><input matInput [(ngModel)]="c.bankAccountName" [disabled]="!canManage()" /></mat-form-field>
+        <mat-form-field><mat-label>เลขที่บัญชี</mat-label><input matInput [(ngModel)]="c.bankAccountNo" [disabled]="!canManage()" /></mat-form-field>
+      </div>
+
+      <div class="images">
+        @for (k of ['logo', 'signature']; track k) {
+          <div class="img-box">
+            <b>{{ k === 'logo' ? 'โลโก้บริษัท' : 'ลายเซ็นผู้ลงนาม' }}</b>
+            <div class="preview">
+              @if (images()[k]; as src) {
+                <img [src]="src" [alt]="k" />
+              } @else {
+                <span class="muted">ยังไม่มี</span>
+              }
+            </div>
+            @if (canManage()) {
+              <div>
+                <button mat-stroked-button (click)="picker.click()">อัปโหลด PNG/JPG</button>
+                @if (images()[k]) {
+                  <button mat-button (click)="removeImage($any(k))">ลบ</button>
+                }
+                <input #picker type="file" accept="image/png,image/jpeg" hidden (change)="upload($any(k), picker)" />
+              </div>
+            }
+          </div>
+        }
+      </div>
+      @if (canManage()) {
+        <button mat-flat-button class="btn-primary" (click)="saveCompany()">บันทึกข้อมูลบริษัท</button>
+      }
+    </section>
+  }
+
+  @if (quotation(); as q) {
+    <section class="panel panel-pad section">
+      <h2>ค่าตั้งต้นใบเสนอราคา</h2>
+      <div class="form-grid">
+        <mat-form-field>
+          <mat-label>คำนำหน้าเลขที่เอกสาร</mat-label>
+          <input matInput [(ngModel)]="q.docPrefix" [disabled]="!canManage()" />
+          <mat-hint>ตัวอย่าง: {{ q.docPrefix }} 6908-001</mat-hint>
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>ส่วนลดเกินกี่ % ต้องขออนุมัติ</mat-label>
+          <mat-select [(ngModel)]="q.discountApprovalThresholdPct" [disabled]="!canManage()">
+            @for (t of thresholds; track t) {
+              <mat-option [value]="t">เกิน {{ t }}%</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>ยืนราคา (วัน)</mat-label>
+          <input matInput type="number" min="1" [(ngModel)]="q.defaultValidityDays" [disabled]="!canManage()" />
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>ค่าดำเนินการตั้งต้น %</mat-label>
+          <input matInput type="number" min="0" [(ngModel)]="q.defaultOverheadPct" [disabled]="!canManage()" />
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>การปัดเศษตั้งต้น</mat-label>
+          <mat-select [(ngModel)]="q.defaultRounding" [disabled]="!canManage()">
+            @for (r of rounding; track r[0]) {
+              <mat-option [value]="r[0]">{{ r[1] }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>แจ้งเตือนก่อนหมดอายุ (วัน)</mat-label>
+          <input matInput type="number" min="0" [(ngModel)]="q.expiryNoticeDays" [disabled]="!canManage()" />
+        </mat-form-field>
+        <mat-form-field class="span-all">
+          <mat-label>เงื่อนไขการชำระเงินตั้งต้น</mat-label>
+          <input matInput [(ngModel)]="q.defaultPaymentCondition" [disabled]="!canManage()" />
+        </mat-form-field>
+        <mat-form-field class="span-all">
+          <mat-label>การรับประกันตั้งต้น</mat-label>
+          <input matInput [(ngModel)]="q.defaultWarranty" [disabled]="!canManage()" />
+        </mat-form-field>
+      </div>
+      <mat-checkbox [(ngModel)]="q.defaultVatEnabled" [disabled]="!canManage()">คิด VAT 7% เป็นค่าตั้งต้น</mat-checkbox>
+      @if (canManage()) {
+        <div class="actions"><button mat-flat-button class="btn-primary" (click)="saveQuotation()">บันทึกค่าตั้งต้น</button></div>
+      }
+    </section>
+  }
+</div>

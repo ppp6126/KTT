@@ -1,0 +1,332 @@
+/* สไตล์ร่วมของหน้ารายการเอกสารและหน้าแก้ไขเอกสาร (จัดซื้อ คลัง เจ้าหนี้ ผู้รับเหมาช่วง แรงงาน รายงาน) */
+.wide {
+  max-width: 1320px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  color: var(--ktt-steel);
+  text-decoration: none;
+}
+
+h1 .chip {
+  font-size: 0.8rem;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px;
+  align-items: center;
+
+  mat-form-field {
+    width: 190px;
+  }
+
+  .search {
+    flex: 1;
+    min-width: 220px;
+  }
+}
+
+.grid {
+  /* ต้องระบุเอง: Tailwind มี utility .grid { display: grid } */
+  display: table;
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--ktt-line);
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  th {
+    background: #f6f7f6;
+    color: var(--ktt-steel);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  tr.clickable {
+    cursor: pointer;
+
+    &:hover td {
+      background: #f3f6f8;
+    }
+  }
+
+  tfoot td {
+    font-weight: 600;
+    background: #f6f7f6;
+  }
+}
+
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.no {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.late,
+.bad {
+  color: var(--ktt-danger);
+}
+
+.warn-text {
+  color: #9a4b05;
+}
+
+.empty {
+  text-align: center;
+  padding: 32px !important;
+}
+
+section.panel {
+  margin-bottom: 14px;
+}
+
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 8px;
+  flex-wrap: wrap;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.grow {
+  flex: 1;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.notice {
+  padding: 10px 14px;
+  border-left: 3px solid var(--ktt-ink-2);
+  border-radius: 4px;
+  margin-bottom: 14px;
+  background: #e8eff4;
+
+  &.ok {
+    border-color: var(--ktt-ok);
+    background: #e5f2ea;
+  }
+
+  &.warn {
+    border-color: var(--ktt-safety);
+    background: #fdeedd;
+  }
+
+  &.danger {
+    border-color: var(--ktt-danger);
+    background: #fbe9e7;
+  }
+}
+
+/* ตารางรายการแก้ไขได้ */
+.items {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+
+  th {
+    background: #f1f3f2;
+    color: var(--ktt-steel);
+    font-weight: 500;
+    text-align: left;
+    padding: 8px 6px;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 2px 6px;
+    border-bottom: 1px solid #eceeed;
+    height: 38px;
+  }
+
+  &.view td {
+    padding: 8px 6px;
+  }
+
+  input {
+    width: 100%;
+    height: 32px;
+    padding: 0 6px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    box-sizing: border-box;
+
+    &:hover:not(:disabled) {
+      border-color: var(--ktt-line);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--ktt-ink-2);
+      background: #fff;
+    }
+
+    &[type='number'] {
+      text-align: right;
+    }
+  }
+
+  .c-no {
+    width: 40px;
+    text-align: center;
+    color: var(--ktt-steel);
+  }
+
+  .c-qty {
+    width: 92px;
+  }
+
+  .c-unit {
+    width: 80px;
+  }
+
+  .c-money {
+    width: 130px;
+  }
+
+  .c-act {
+    width: 44px;
+  }
+
+  .best {
+    background: #e5f2ea;
+    font-weight: 600;
+  }
+}
+
+.add-row {
+  padding: 8px 10px;
+}
+
+.totals {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+
+  dl {
+    margin: 0;
+    min-width: 300px;
+  }
+
+  dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+  }
+
+  dt {
+    color: var(--ktt-steel);
+  }
+
+  dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .grand {
+    border-top: 1px solid var(--ktt-line);
+    font-weight: 600;
+    padding-top: 6px;
+
+    dt {
+      color: var(--ktt-ink);
+    }
+  }
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px 20px;
+
+  > div {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .wide-cell {
+    grid-column: 1 / -1;
+  }
+
+  .label {
+    color: var(--ktt-steel);
+    font-size: 0.82rem;
+  }
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+
+  .kpi {
+    background: var(--ktt-paper);
+    border: 1px solid var(--ktt-line);
+    border-radius: var(--ktt-radius-m);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    strong {
+      font-size: 1.15rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .label {
+      color: var(--ktt-steel);
+      font-size: 0.82rem;
+    }
+  }
+}
+
+.chk {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+}
+
+.pre {
+  white-space: pre-line;
+}

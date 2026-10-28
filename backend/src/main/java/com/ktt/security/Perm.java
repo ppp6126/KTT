@@ -42,4 +42,41 @@ public final class Perm {
 
     public static final String ATTACHMENT_READ = "attachment.read";
     public static final String ATTACHMENT_WRITE = "attachment.write";
+
+    public static final String PROJECT_READ = "project.read";
+    public static final String PROJECT_READ_ALL = "project.read_all";
+    public static final String PROJECT_WRITE = "project.write";
+    public static final String SITE_REPORT = "site.report";
+
+    public static final String CONTRACT_READ = "contract.read";
+    public static final String CONTRACT_WRITE = "contract.write";
+    public static final String CONTRACT_APPROVE = "contract.approve";
+
+    public static final String FINANCE_READ = "finance.read";
+    public static final String FINANCE_WRITE = "finance.write";
+    public static final String FINANCE_VOID = "finance.void";
+
+    public static final String NOTIFICATION_READ = "notification.read";
+
+    public static final String PURCHASE_REQUEST = "purchase.request";
+    public static final String PURCHASE_READ = "purchase.read";
+    public static final String PURCHASE_WRITE = "purchase.write";
+    public static final String PURCHASE_APPROVE = "purchase.approve";
+    public static final String STOCK_READ = "stock.read";
+    public static final String STOCK_WRITE = "stock.write";
+    public static final String SUBCONTRACT_READ = "subcontract.read";
+    public static final String SUBCONTRACT_WRITE = "subcontract.write";
+    public static final String LABOR_READ = "labor.read";
+    public static final String LABOR_WRITE = "labor.write";
+    public static final String AP_READ = "ap.read";
+    public static final String AP_WRITE = "ap.write";
+    public static final String AP_APPROVE = "ap.approve";
+    public static final String TAX_REPORT = "tax.report";
+
+    public static final String DASHBOARD_VIEW = "dashboard.view";
+    public static final String PERMIT_READ = "permit.read";
+    public static final String PERMIT_WRITE = "permit.write";
+    public static final String SERVICE_READ = "service.read";
+    public static final String SERVICE_WRITE = "service.write";
+    public static final String BACKUP_MANAGE = "backup.manage";
 }

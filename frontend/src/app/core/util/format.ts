@@ -15,6 +15,20 @@ export function thDate(value: string | Date | null | undefined): string {
   return DATE.format(new Date(value));
 }
 
+/** แบบสั้นตามเอกสารเดิมของบริษัท เช่น 29/7/69 (ปี พ.ศ. 2 หลัก) */
+export function thDateShort(value: string | Date | null | undefined): string {
+  if (!value) return '–';
+  const d = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
+  return `${d.getDate()}/${d.getMonth() + 1}/${String((d.getFullYear() + 543) % 100).padStart(2, '0')}`;
+}
+
+/** วันที่เต็มแบบไทย เช่น 29 กรกฎาคม 2569 */
+export function thDateLong(value: string | Date | null | undefined): string {
+  if (!value) return '–';
+  const d = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
+  return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+}
+
 export function thDateTime(value: string | Date | null | undefined): string {
   if (!value) return '–';
   return DATE_TIME.format(new Date(value));
@@ -99,4 +113,48 @@ export const ENTITY_LABEL: Record<string, string> = {
   lead: 'ลีด',
   quotation: 'ใบเสนอราคา',
   boq: 'BOQ',
+  project: 'โครงการ',
+  contract: 'สัญญา',
+  change_order: 'งานเพิ่ม-ลด',
+  daily_report: 'รายงานประจำวัน',
+  project_issue: 'ปัญหา/ความเสี่ยง',
+  punch_item: 'Punch list',
+  qc_inspection: 'ตรวจ QC',
+  qc_template: 'แม่แบบ QC',
+  safety_log: 'ความปลอดภัย',
+  sales_doc: 'เอกสารการเงิน',
+  supplier: 'ผู้ขาย/ผู้รับเหมาช่วง',
+  purchase_request: 'ใบขอซื้อ',
+  purchase_order: 'ใบสั่งซื้อ',
+  goods_receipt: 'ใบรับสินค้า',
+  warehouse: 'คลัง',
+  stock_doc: 'เอกสารคลัง',
+  subcontract: 'สัญญาจ้างช่วง',
+  worker: 'แรงงาน',
+  wage_payment: 'ใบสรุปค่าแรง',
+  ap_bill: 'ใบตั้งหนี้',
+  payment_voucher: 'ใบสำคัญจ่าย',
+  permit: 'ใบอนุญาต/เอกสาร',
+  service_ticket: 'งานแจ้งซ่อม',
+  satisfaction_survey: 'ความพึงพอใจ',
+  calendar_event: 'นัดหมาย',
+  backup: 'สำรองข้อมูล',
 };
+
+/** วันนี้ตามเวลาเครื่องในรูปแบบ yyyy-mm-dd (ใช้กับ input type=date) */
+export function todayIso(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function daysBetween(fromIso: string, toIso: string): number {
+  return Math.round((new Date(`${toIso}T00:00:00`).getTime() - new Date(`${fromIso}T00:00:00`).getTime()) / 86400000);
+}

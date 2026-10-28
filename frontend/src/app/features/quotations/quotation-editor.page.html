@@ -1,0 +1,331 @@
+@if (q(); as qt) {
+  @if (form(); as f) {
+    <div class="page wide">
+      <a routerLink="/quotations" class="back"><mat-icon>arrow_back</mat-icon> ใบเสนอราคาทั้งหมด</a>
+
+      <div class="page-head">
+        <div>
+          <h1>
+            {{ qt.displayNo }}
+            <span class="chip big" [class]="statusInfo[qt.status].tone">{{ statusInfo[qt.status].label }}</span>
+          </h1>
+          <p>
+            {{ qt.customerName }}
+            @if (qt.leadId) {
+              , งาน <a [routerLink]="['/leads', qt.leadId]">{{ qt.leadTitle }}</a>
+            }
+            , ออกโดย {{ qt.createdByName }}
+          </p>
+        </div>
+        <div class="actions">
+          @if (auth.can(Perm.QUOTATION_EXPORT)) {
+            <button mat-stroked-button (click)="print()"><mat-icon>print</mat-icon> พิมพ์ / PDF</button>
+          }
+          @if (canWrite()) {
+            @if (qt.status === 'draft' || qt.status === 'approved') {
+              @if (editable()) {
+                <button mat-stroked-button (click)="save()" [disabled]="busy() || !dirty()">{{ dirty() ? 'บันทึกร่าง' : 'บันทึกแล้ว' }}</button>
+              }
+              @if (auth.can(Perm.QUOTATION_SEND)) {
+                <button mat-flat-button class="btn-primary" (click)="send()" [disabled]="busy()">
+                  {{ needsApproval() && qt.status === 'draft' ? 'ส่งขออนุมัติส่วนลด' : 'ส่งลูกค้า' }}
+                </button>
+              }
+            }
+            @if (qt.status === 'accepted') {
+              @if (qt.projectId) {
+                <a mat-stroked-button [routerLink]="['/projects', qt.projectId]"><mat-icon>construction</mat-icon> ไปที่โครงการ</a>
+              } @else if (auth.can(Perm.CONTRACT_WRITE) && auth.can(Perm.PROJECT_WRITE)) {
+                <button mat-flat-button class="btn-primary" (click)="toContract()"><mat-icon>contract</mat-icon> สร้างโครงการและสัญญา</button>
+              }
+            }
+            @if (qt.status === 'sent' || qt.status === 'expired') {
+              <button mat-flat-button class="btn-primary" (click)="accept()">ลูกค้าอนุมัติ</button>
+              <button mat-stroked-button (click)="reject()">ลูกค้าปฏิเสธ</button>
+            }
+            <button mat-icon-button [matMenuTriggerFor]="more" aria-label="เพิ่มเติม"><mat-icon>more_vert</mat-icon></button>
+            <mat-menu #more="matMenu">
+              @if (['sent', 'approved', 'rejected', 'expired', 'pending_approval'].includes(qt.status) && qt.latestRevision) {
+                <button mat-menu-item (click)="revise()"><mat-icon>edit_note</mat-icon>แก้ไขเป็น Revision ใหม่</button>
+              }
+              @if (qt.status === 'draft') {
+                <button mat-menu-item (click)="remove()"><mat-icon>delete</mat-icon>ลบฉบับร่าง</button>
+              }
+            </mat-menu>
+          }
+        </div>
+      </div>
+      @if (busy()) {
+        <mat-progress-bar mode="indeterminate" />
+      }
+
+      @if (qt.approval; as a) {
+        <div class="notice" [class.warn]="a.status === 'pending'" [class.ok]="a.status === 'approved'" [class.danger]="a.status === 'rejected'">
+          @if (a.status === 'pending') {
+            รออนุมัติส่วนลดจากผู้บริหาร (ขอโดย {{ a.requestedByName }}, {{ a.createdAt | thDate: true }})
+            @if (auth.can(Perm.QUOTATION_APPROVE)) {
+              <a routerLink="/approvals">ไปหน้าอนุมัติ</a>
+            }
+          } @else {
+            {{ a.status === 'approved' ? 'อนุมัติส่วนลดแล้ว' : 'ไม่อนุมัติส่วนลด' }} โดย {{ a.decidedByName }}, {{ a.decidedAt | thDate: true }}
+            @if (a.comment) {
+              : "{{ a.comment }}"
+            }
+          }
+        </div>
+      }
+      @if (!qt.latestRevision) {
+        <div class="notice">ฉบับนี้มี Revision ใหม่กว่าแล้ว</div>
+      }
+
+      <div class="layout">
+        <div class="main">
+          <section class="panel panel-pad">
+            <h2>ลูกค้าและเงื่อนไข</h2>
+            <div class="form-grid">
+              <mat-form-field class="span-2">
+                <mat-label>ชื่อลูกค้า</mat-label>
+                <input matInput [ngModel]="f.customerName" (ngModelChange)="set('customerName', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>เลขผู้เสียภาษี</mat-label>
+                <input matInput [ngModel]="f.customerTaxId" (ngModelChange)="set('customerTaxId', $event)" [disabled]="!editable()" maxlength="13" />
+              </mat-form-field>
+              <mat-form-field class="span-2">
+                <mat-label>ที่อยู่</mat-label>
+                <input matInput [ngModel]="f.customerAddress" (ngModelChange)="set('customerAddress', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>โทรศัพท์</mat-label>
+                <input matInput [ngModel]="f.customerPhone" (ngModelChange)="set('customerPhone', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>วันที่</mat-label>
+                <input matInput type="date" [ngModel]="f.issueDate" (ngModelChange)="set('issueDate', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>ยืนราคาถึง</mat-label>
+                <input matInput type="date" [ngModel]="f.validUntil" (ngModelChange)="set('validUntil', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>อ้างอิงใบสั่งซื้อเลขที่</mat-label>
+                <input matInput [ngModel]="f.referenceNo" (ngModelChange)="set('referenceNo', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+              <mat-form-field class="span-2">
+                <mat-label>เงื่อนไขการชำระเงิน</mat-label>
+                <input matInput [ngModel]="f.paymentCondition" (ngModelChange)="set('paymentCondition', $event)" [disabled]="!editable()" placeholder="เช่น แบ่งชำระ 3 งวด 30/40/30" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>ชื่องาน (ไม่แสดงบนเอกสาร)</mat-label>
+                <input matInput [ngModel]="f.title" (ngModelChange)="set('title', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="items-head">
+              <h2>รายการ</h2>
+              @if (editable()) {
+                <div class="row-actions">
+                  <button mat-stroked-button (click)="addItem('item')"><mat-icon>add</mat-icon> รายการ</button>
+                  <button mat-button (click)="addItem('heading')">หัวข้อ</button>
+                  <button mat-button (click)="addItem('note')">หมายเหตุ</button>
+                </div>
+              }
+            </div>
+            <div class="table-scroll">
+              <table class="items">
+                <thead>
+                  <tr>
+                    <th class="c-no">ลำดับ</th>
+                    <th>รายการ</th>
+                    <th class="c-qty num">จำนวน</th>
+                    <th class="c-unit">หน่วย</th>
+                    <th class="c-money num">ราคา/หน่วย</th>
+                    <th class="c-money num">จำนวนเงิน</th>
+                    @if (canCost()) {
+                      <th class="c-money num cost">ต้นทุน/หน่วย</th>
+                    }
+                    <th class="c-act"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (it of items(); track $index; let i = $index) {
+                    <tr [class]="'t-' + it.itemType">
+                      <td class="c-no">{{ it.itemType === 'item' ? itemNo(i) : '' }}</td>
+                      @if (it.itemType === 'item') {
+                        <td>
+                          @if (editable()) {
+                            <input [(ngModel)]="it.description" (ngModelChange)="touch()" placeholder="รายละเอียด" aria-label="รายการ" />
+                          } @else {
+                            {{ it.description }}
+                          }
+                        </td>
+                        <td class="c-qty num">
+                          @if (editable()) {
+                            <input type="number" min="0" step="any" [(ngModel)]="it.quantity" (ngModelChange)="touch()" aria-label="จำนวน" />
+                          } @else {
+                            {{ it.quantity }}
+                          }
+                        </td>
+                        <td class="c-unit">
+                          @if (editable()) {
+                            <input [(ngModel)]="it.unit" (ngModelChange)="touch()" aria-label="หน่วย" />
+                          } @else {
+                            {{ it.unit }}
+                          }
+                        </td>
+                        <td class="c-money num">
+                          @if (editable()) {
+                            <input type="number" min="0" step="any" [(ngModel)]="it.unitPrice" (ngModelChange)="touch()" aria-label="ราคาต่อหน่วย" />
+                          } @else {
+                            {{ it.unitPrice | money }}
+                          }
+                        </td>
+                        <td class="c-money num">{{ calc().amounts[i] | money }}</td>
+                        @if (canCost()) {
+                          <td class="c-money num cost">
+                            @if (editable()) {
+                              <input type="number" min="0" step="any" [(ngModel)]="it.unitCost" (ngModelChange)="touch()" aria-label="ต้นทุนต่อหน่วย" />
+                            } @else {
+                              {{ it.unitCost | money }}
+                            }
+                          </td>
+                        }
+                      } @else {
+                        <td [attr.colspan]="canCost() ? 6 : 5">
+                          @if (editable()) {
+                            <input [(ngModel)]="it.description" (ngModelChange)="touch()" [placeholder]="it.itemType === 'heading' ? 'หัวข้อ เช่น งานโครงสร้าง' : 'หมายเหตุ'" [attr.aria-label]="it.itemType === 'heading' ? 'หัวข้อ' : 'หมายเหตุ'" />
+                          } @else {
+                            {{ it.description }}
+                          }
+                        </td>
+                      }
+                      <td class="c-act">
+                        @if (editable()) {
+                          <button mat-icon-button [matMenuTriggerFor]="rm" aria-label="จัดการแถว"><mat-icon>more_vert</mat-icon></button>
+                          <mat-menu #rm="matMenu" xPosition="before">
+                            <button mat-menu-item (click)="addItem('item', i)"><mat-icon>add</mat-icon>แทรกรายการถัดไป</button>
+                            <button mat-menu-item (click)="moveItem(i, -1)"><mat-icon>arrow_upward</mat-icon>เลื่อนขึ้น</button>
+                            <button mat-menu-item (click)="moveItem(i, 1)"><mat-icon>arrow_downward</mat-icon>เลื่อนลง</button>
+                            <button mat-menu-item (click)="removeItem(i)"><mat-icon>delete</mat-icon>ลบแถว</button>
+                          </mat-menu>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="8" class="empty muted">ยังไม่มีรายการ</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel panel-pad">
+            <h2>ขอบเขตงานและเงื่อนไขอื่น</h2>
+            <div class="form-grid">
+              <mat-form-field>
+                <mat-label>ระยะเวลาก่อสร้าง (วัน)</mat-label>
+                <input matInput type="number" min="0" [ngModel]="f.durationDays" (ngModelChange)="set('durationDays', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+              <mat-form-field class="span-2">
+                <mat-label>การรับประกันงาน</mat-label>
+                <input matInput [ngModel]="f.warrantyTerms" (ngModelChange)="set('warrantyTerms', $event)" [disabled]="!editable()" placeholder="เช่น รับประกันงานโครงสร้าง 1 ปี" />
+              </mat-form-field>
+              <mat-form-field class="span-all">
+                <mat-label>ขอบเขตงานที่รวม</mat-label>
+                <textarea matInput rows="3" [ngModel]="f.scopeIn" (ngModelChange)="set('scopeIn', $event)" [disabled]="!editable()"></textarea>
+              </mat-form-field>
+              <mat-form-field class="span-all">
+                <mat-label>สิ่งที่ไม่รวมในราคา</mat-label>
+                <textarea matInput rows="3" [ngModel]="f.scopeOut" (ngModelChange)="set('scopeOut', $event)" [disabled]="!editable()"></textarea>
+              </mat-form-field>
+              <mat-form-field class="span-all">
+                <mat-label>หมายเหตุท้ายเอกสาร</mat-label>
+                <textarea matInput rows="2" [ngModel]="f.notes" (ngModelChange)="set('notes', $event)" [disabled]="!editable()"></textarea>
+              </mat-form-field>
+            </div>
+          </section>
+        </div>
+
+        <aside class="side">
+          <section class="panel panel-pad totals">
+            <h2>สรุปยอด</h2>
+            <div class="controls">
+              <mat-form-field subscriptSizing="dynamic">
+                <mat-label>ส่วนลด</mat-label>
+                <mat-select [ngModel]="f.discountPct" (ngModelChange)="set('discountPct', $event)" [disabled]="!editable()">
+                  @for (d of discountOptions; track d) {
+                    <mat-option [value]="d">{{ d === 0 ? 'ไม่มีส่วนลด' : d + '%' }}{{ d > qt.approvalThresholdPct ? ' (ต้องอนุมัติ)' : '' }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field subscriptSizing="dynamic">
+                <mat-label>ค่าดำเนินการ %</mat-label>
+                <input matInput type="number" min="0" max="100" step="0.01" [ngModel]="f.overheadPct" (ngModelChange)="set('overheadPct', $event)" [disabled]="!editable()" />
+              </mat-form-field>
+              <mat-checkbox [ngModel]="f.vatEnabled" (ngModelChange)="set('vatEnabled', $event)" [disabled]="!editable()">คิดภาษีมูลค่าเพิ่ม {{ f.vatPct }}%</mat-checkbox>
+              <mat-form-field subscriptSizing="dynamic">
+                <mat-label>การปัดเศษ</mat-label>
+                <mat-select [ngModel]="f.roundingMode" (ngModelChange)="set('roundingMode', $event)" [disabled]="!editable()">
+                  @for (r of roundingOptions; track r[0]) {
+                    <mat-option [value]="r[0]">{{ r[1] }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field subscriptSizing="dynamic">
+                <mat-label>หัก ณ ที่จ่าย (แสดงท้ายเอกสาร)</mat-label>
+                <mat-select [ngModel]="f.whtPct" (ngModelChange)="set('whtPct', $event)" [disabled]="!editable()">
+                  @for (w of [0, 1, 2, 3, 5]; track w) {
+                    <mat-option [value]="w">{{ w === 0 ? 'ไม่หัก' : w + '%' }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </div>
+
+            <dl>
+              <div><dt>รวมเงิน</dt><dd>{{ calc().subtotal | money }}</dd></div>
+              @if (calc().discount) {
+                <div><dt>ส่วนลด {{ f.discountPct }}%</dt><dd>-{{ calc().discount | money }}</dd></div>
+              }
+              @if (calc().overhead) {
+                <div><dt>ค่าดำเนินการ {{ f.overheadPct }}%</dt><dd>{{ calc().overhead | money }}</dd></div>
+              }
+              <div><dt>ภาษีมูลค่าเพิ่ม {{ f.vatEnabled ? f.vatPct + '%' : '' }}</dt><dd>{{ f.vatEnabled ? (calc().vat | money) : '–' }}</dd></div>
+              @if (calc().rounding) {
+                <div><dt>ส่วนปัดเศษ</dt><dd>{{ calc().rounding | money }}</dd></div>
+              }
+              <div class="grand"><dt>ยอดสุทธิ</dt><dd>{{ calc().total | money }}</dd></div>
+              @if (calc().wht) {
+                <div><dt>หัก ณ ที่จ่าย {{ f.whtPct }}%</dt><dd>-{{ calc().wht | money }}</dd></div>
+                <div><dt>ยอดชำระหลังหัก</dt><dd>{{ calc().payable | money }}</dd></div>
+              }
+              @if (canCost() && margin() !== null) {
+                <div class="margin" [class.low]="margin()! < 10"><dt>Margin (ต้นทุน {{ costTotal() | money }})</dt><dd>{{ margin() }}%</dd></div>
+              }
+            </dl>
+            @if (needsApproval() && qt.status === 'draft') {
+              <p class="warn-text">ส่วนลดเกิน {{ qt.approvalThresholdPct }}% ต้องให้ผู้บริหารอนุมัติก่อนส่งลูกค้า</p>
+            }
+          </section>
+
+          @if (revisions().length > 1) {
+            <section class="panel panel-pad">
+              <h2>ประวัติ Revision</h2>
+              <ul class="revs">
+                @for (r of revisions(); track r.id) {
+                  <li [class.current]="r.id === qt.id">
+                    <button type="button" (click)="openRevision(r.id)" [disabled]="r.id === qt.id">
+                      Rev.{{ r.revision }} <span class="muted">{{ statusLabel(r.status) }}</span>
+                    </button>
+                    <span class="num">{{ r.totalAmount | money }}</span>
+                  </li>
+                }
+              </ul>
+            </section>
+          }
+        </aside>
+      </div>
+    </div>
+  }
+}
