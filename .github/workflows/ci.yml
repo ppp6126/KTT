@@ -9,6 +9,20 @@ jobs:
   backend:
     name: Backend (Java 21 / Quarkus)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ktt
+          POSTGRES_PASSWORD: ktt
+          POSTGRES_DB: ktt
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ktt" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      QUARKUS_DATASOURCE_DEVSERVICES_ENABLED: 'false'
+      QUARKUS_DATASOURCE_USERNAME: ktt
+      QUARKUS_DATASOURCE_PASSWORD: ktt
     defaults:
       run:
         working-directory: backend
@@ -21,10 +35,19 @@ jobs:
           cache: maven
       - name: Compile + unit tests
         run: mvn -B -ntp test
-      - name: Integration test - auth flow (PostgreSQL via Dev Services)
+      - name: Create empty databases for each integration test
+        run: |
+          for db in ktt_auth ktt_smoke; do
+            PGPASSWORD=ktt psql -h localhost -U ktt -d ktt -c "create database $db"
+          done
+      - name: Integration test - auth flow (PostgreSQL)
+        env:
+          QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://localhost:5432/ktt_auth
         run: mvn -B -ntp test -Dtest=AuthFlowIT -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tee it-auth.log; exit ${PIPESTATUS[0]}
       - name: Integration test - all phases API smoke + backup
         if: always()
+        env:
+          QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://localhost:5432/ktt_smoke
         run: mvn -B -ntp test -Dtest=ApiSmokeIT -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tee it-smoke.log; exit ${PIPESTATUS[0]}
       - name: Report failures as annotations
         if: failure()
