@@ -201,7 +201,9 @@ class ApiSmokeIT {
         String cal = get("/api/calendar?from=" + today.minusDays(1) + "&to=" + today.plusDays(40)).then().statusCode(200).extract().asString();
         assertTrue(cal.contains("ประชุมทดสอบ"), "ปฏิทินต้องมีนัดหมาย");
         assertTrue(cal.contains("\"source\":\"service\""), "ปฏิทินต้องมีนัดซ่อม");
-        assertTrue(cal.contains("\"source\":\"purchase\"") || cal.contains("\"source\":\"finance\""), "ปฏิทินต้องมีรายการการเงิน/จัดซื้อ");
+        // ทุกบิล/PO ในชุดทดสอบนี้จ่ายหรือรับครบแล้ว จึงไม่มีรายการการเงินค้าง ตรวจวันหมดอายุใบอนุญาตฉบับต่ออายุแทน
+        String calYear = get("/api/calendar?from=" + today.plusDays(300) + "&to=" + today.plusDays(400)).then().statusCode(200).extract().asString();
+        assertTrue(calYear.contains("ใบอนุญาตก่อสร้าง อ.1"), "ปฏิทินต้องมีวันหมดอายุใบอนุญาต");
         get("/api/dashboard").then().statusCode(200).body("kpis", notNullValue()).body("months.size()", equalTo(12))
                 .body("alerts.ticketsOpen", equalTo(1));
 
