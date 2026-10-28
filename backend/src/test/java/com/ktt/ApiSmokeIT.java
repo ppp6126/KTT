@@ -142,6 +142,16 @@ class ApiSmokeIT {
         Response bill = post("/api/ap/bills/from-po/" + poId, Map.of());
         bill.then().statusCode(201).body("subtotal", equalTo(1500.0f));
         String billId = bill.path("id");
+        // ใบกำกับภาษีต้องมีเลขที่ใบกำกับของผู้ขายก่อนอนุมัติ
+        post("/api/ap/bills/" + billId + "/approve", Map.of()).then().statusCode(400).body("code", equalTo("invoice_no_required"));
+        List<Map<String, Object>> billItems = new ArrayList<>();
+        for (Map<String, Object> it : bill.jsonPath().<Map<String, Object>>getList("items")) {
+            billItems.add(m("description", it.get("description"), "quantity", it.get("quantity"), "unit", it.get("unit"), "unitPrice", it.get("unitPrice")));
+        }
+        put("/api/ap/bills/" + billId, m("supplierId", supplierId, "supplierInvoiceNo", "IV-0001", "taxInvoice", true,
+                "billDate", bill.path("billDate"), "dueDate", bill.path("dueDate"), "taxPeriod", bill.path("taxPeriod"),
+                "projectId", projectId, "poId", poId, "category", bill.path("category"), "vatEnabled", true,
+                "whtPct", 0, "retentionAmount", 0, "items", billItems)).then().statusCode(200);
         post("/api/ap/bills/" + billId + "/approve", Map.of()).then().statusCode(200).body("status", equalTo("approved"));
         Response cost = get("/api/reports/project-cost/" + projectId);
         cost.then().statusCode(200);
