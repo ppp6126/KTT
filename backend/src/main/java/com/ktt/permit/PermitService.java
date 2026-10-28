@@ -168,7 +168,8 @@ public class PermitService {
         n.createdBy = currentUser.id();
         n.persist();
         old.status = "renewed";
-        audit.log("permit", old.id, "renew", Map.of("expiry", String.valueOf(old.expiryDate)), Map.of("newId", n.id.toString(), "expiry", String.valueOf(n.expiryDate)));
+        audit.log("permit", old.id, AuditService.ACTION_UPDATE, Map.of("status", "active", "expiry", String.valueOf(old.expiryDate)),
+                Map.of("status", "renewed", "renewedTo", n.id.toString(), "expiry", String.valueOf(n.expiryDate)));
         return get(n.id);
     }
 
