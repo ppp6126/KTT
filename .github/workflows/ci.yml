@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev, 'ci/**']
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (Java 21 / Quarkus)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Compile + unit tests
+        run: mvn -B -ntp test
+      - name: Integration test - auth flow (PostgreSQL via Dev Services)
+        run: mvn -B -ntp test -Dtest=AuthFlowIT -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Integration test - all phases API smoke + backup
+        run: mvn -B -ntp test -Dtest=ApiSmokeIT -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend (Angular)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx ng build
+      - run: npx ng test --watch=false

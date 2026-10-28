@@ -188,11 +188,12 @@ public class BackupService {
             List<Map<String, Object>> tableInfo = new ArrayList<>();
             try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(tmp));
                  Connection c = dataSource.getConnection()) {
-                c.setReadOnly(true);
+                // ไม่ใช้ setReadOnly() เพราะค่าจะติดไปกับ connection ที่คืนเข้า pool; กำหนดเฉพาะธุรกรรมนี้แทน
                 c.setAutoCommit(false); // ให้ทุกตารางอ่านจาก snapshot เดียวกัน
                 try (Statement st = c.createStatement()) {
-                    st.execute("set transaction isolation level repeatable read");
+                    st.execute("set transaction isolation level repeatable read, read only");
                 }
+                String version = schemaVersion(c);
                 for (String t : tables(c)) {
                     zip.putNextEntry(new ZipEntry("tables/" + t + ".csv"));
                     long n = writeTable(c, t, zip);
@@ -206,9 +207,10 @@ public class BackupService {
                     files = writeAttachments(c, zip);
                 }
                 c.commit();
+                c.setAutoCommit(true);
                 manifest.put("app", "KTT");
                 manifest.put("createdAt", Instant.now().toString());
-                manifest.put("schemaVersion", schemaVersion(c));
+                manifest.put("schemaVersion", version);
                 manifest.put("tables", tableInfo);
                 manifest.put("attachmentFiles", files);
                 manifest.put("excludedTables", SKIP_TABLES);
@@ -249,12 +251,13 @@ public class BackupService {
         return out;
     }
 
-    private String schemaVersion(Connection c) {
+    private String schemaVersion(Connection c) throws java.sql.SQLException {
+        // ตรวจก่อนว่ามีตาราง flyway ไม่ให้ query ผิดแล้วธุรกรรมทั้งก้อนถูกยกเลิก
         try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery("select max(version) from flyway_schema_history where success")) {
+             ResultSet rs = st.executeQuery("""
+                     select case when to_regclass('flyway_schema_history') is null then null
+                            else (xpath('/row/v/text()', query_to_xml('select max(version) v from flyway_schema_history where success', false, true, '')))[1]::text end""")) {
             return rs.next() ? rs.getString(1) : null;
-        } catch (java.sql.SQLException e) {
-            return null; // ไม่มีตาราง flyway (เช่นทดสอบ) ไม่ถือเป็นข้อผิดพลาด
         }
     }
 
