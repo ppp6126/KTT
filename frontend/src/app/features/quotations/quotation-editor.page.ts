@@ -235,6 +235,7 @@ export class QuotationEditorPage implements OnInit {
       scopeOut: f.scopeOut || null,
       notes: f.notes || null,
       items: this.items().map((i) => ({
+        id: i.id ?? null,
         itemType: i.itemType,
         description: i.description.trim(),
         quantity: i.itemType === 'item' ? Number(i.quantity) || 0 : null,

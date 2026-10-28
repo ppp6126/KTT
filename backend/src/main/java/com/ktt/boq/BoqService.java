@@ -76,6 +76,16 @@ public class BoqService {
         return toDto(b, BoqItem.listFor(id));
     }
 
+    /**
+     * ใช้ภายในตอนสร้างใบเสนอราคาจาก BOQ: คืนต้นทุนครบเสมอเพื่อเก็บไว้คำนวณกำไรให้ผู้อนุมัติ
+     * (ผู้ใช้ที่ไม่มี cost.view จะไม่เห็นค่าเหล่านี้ใน response ของใบเสนอราคา)
+     */
+    @Transactional
+    public BoqDto getWithCost(UUID id) {
+        Boq b = requireBoq(id, false);
+        return toDto(b, BoqItem.listFor(id), true);
+    }
+
     // ================================================================= commands
 
     @Transactional
@@ -116,7 +126,7 @@ public class BoqService {
                 throw ApiException.badRequest("factor_table_required", "กรุณาเลือกตาราง Factor F");
             }
         }
-        if (!Set.of(0, 1, 2, 3, 5).contains(req.whtPct().intValue())) {
+        if (req.whtPct().stripTrailingZeros().scale() > 0 || !Set.of(0, 1, 2, 3, 5).contains(req.whtPct().intValue())) {
             throw ApiException.badRequest("invalid_wht", "หัก ณ ที่จ่ายต้องเป็น 0, 1, 2, 3 หรือ 5%");
         }
         b.name = req.name().trim();
@@ -396,7 +406,10 @@ public class BoqService {
     }
 
     BoqDto toDto(Boq b, List<BoqItem> raw) {
-        boolean cost = currentUser.canViewCost();
+        return toDto(b, raw, currentUser.canViewCost());
+    }
+
+    BoqDto toDto(Boq b, List<BoqItem> raw, boolean cost) {
         List<BoqItem> items = orderItems(raw);
         BoqCalculator.Result r = calculate(b, items);
         Map<UUID, String> numbers = numbers(items);

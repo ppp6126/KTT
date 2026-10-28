@@ -393,7 +393,7 @@ public class AftercareService {
                        count(*) filter (where status in ('open', 'scheduled', 'in_progress') and priority = 'urgent'),
                        count(*) filter (where status in ('open', 'scheduled') and appointment_at < now()),
                        round(avg(extract(epoch from resolved_at - reported_at) / 86400) filter (where resolved_at is not null and resolved_at > now() - interval '180 days')::numeric, 1),
-                       coalesce(sum(labor_cost + material_cost) filter (where in_warranty and coalesce(resolved_at, reported_at) >= date_trunc('year', now())), 0)
+                       coalesce(sum(labor_cost + material_cost) filter (where in_warranty and coalesce(resolved_at, reported_at) >= date_trunc('year', now() at time zone 'Asia/Bangkok') at time zone 'Asia/Bangkok'), 0)
                 from service_tickets where deleted_at is null""").getSingleResult();
         return new TicketStats(SqlValues.count(r[0]), SqlValues.count(r[1]), SqlValues.count(r[2]), SqlValues.count(r[3]),
                 SqlValues.count(r[4]), SqlValues.decimal(r[5]), SqlValues.decimal0(r[6]));

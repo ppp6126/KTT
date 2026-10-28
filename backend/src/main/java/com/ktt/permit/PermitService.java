@@ -150,6 +150,9 @@ public class PermitService {
         if (req.expiryDate() == null || (old.expiryDate != null && !req.expiryDate().isAfter(old.expiryDate))) {
             throw ApiException.badRequest("invalid_expiry", "วันหมดอายุใหม่ต้องหลังวันหมดอายุเดิม");
         }
+        if (req.issueDate() != null && req.expiryDate().isBefore(req.issueDate())) {
+            throw ApiException.badRequest("invalid_dates", "วันหมดอายุต้องไม่ก่อนวันออกเอกสาร");
+        }
         Permit n = new Permit();
         n.kind = old.kind;
         n.name = old.name;

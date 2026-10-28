@@ -13,6 +13,7 @@ import { ThDatePipe, thDateLong, todayIso } from '../../core/util/format';
 import { AttachmentPanel } from '../../shared/attachment-panel';
 import { confirmAction } from '../../shared/confirm-dialog';
 import { Notify } from '../../shared/notify.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { DAILY_STATUS, DailyReport, DailyReportSave, ProjectsApi, Task, WEATHER, WORKER_TRADES, WorkerLine } from './projects.api';
 
 interface TaskEntry {
@@ -49,8 +50,22 @@ interface TaskEntry {
           }
         </div>
 
+        @if (draft(); as d) {
+          <div class="notice warn draft" role="status">
+            <span>
+              มีข้อมูลที่ยังไม่ได้บันทึกค้างในเครื่องนี้ ({{ dateOf(d.at) | thDate: true }})
+              @if (d.stale) {
+                <b>· รายงานในระบบถูกแก้ไขหลังจากนั้นแล้ว ถ้าใช้ร่างนี้จะทับข้อมูลใหม่กว่า</b>
+              }
+            </span>
+            <span class="draft-actions">
+              <button mat-button (click)="discardDraft()">ทิ้งร่าง</button>
+              <button mat-stroked-button (click)="applyDraft()">ใช้ร่างนี้</button>
+            </span>
+          </div>
+        }
         @if (restored()) {
-          <p class="notice warn" role="status">กู้ข้อมูลที่ยังไม่ได้บันทึกจากเครื่องนี้แล้ว ตรวจสอบแล้วกดบันทึก</p>
+          <p class="notice warn" role="status">ใช้ข้อมูลจากร่างในเครื่องแล้ว ตรวจสอบแล้วกดบันทึก</p>
         }
         @if (report()?.status === 'submitted' || report()?.status === 'acknowledged') {
           <p class="muted small">
@@ -186,6 +201,8 @@ interface TaskEntry {
   `,
   styles: `
     .narrow { max-width: 760px; }
+    .draft { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+    .draft-actions { display: flex; gap: 8px; }
     .back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 12px; color: var(--ktt-steel); text-decoration: none; }
     .page-head p .chip { margin-left: 8px; }
     section.panel { margin-bottom: 12px; }
@@ -244,6 +261,9 @@ export class DailyReportPage implements OnInit, OnDestroy {
   readonly weathers = Object.entries(WEATHER);
   readonly today = todayIso();
   readonly restored = signal(false);
+  /** ร่างที่พบในเครื่อง รอผู้ใช้เลือกว่าจะใช้หรือทิ้ง (stale = ข้อมูลในระบบเปลี่ยนหลังจากเก็บร่าง) */
+  readonly draft = signal<{ at: number; stale: boolean; m: DailyReportSave; entries: { taskId: string; pct: number | null; note: string }[] } | null>(null);
+  private readonly userId = inject(AuthService).user()?.id ?? 'anon';
   private timer?: ReturnType<typeof setInterval>;
   private readonly stashFn = () => this.stash();
 
@@ -299,7 +319,8 @@ export class DailyReportPage implements OnInit, OnDestroy {
   }
 
   private draftKey(): string {
-    return 'ktt.daily-draft.' + (this.report()?.id ?? this.reportId() ?? 'new-' + this.projectId());
+    // ผูกกับผู้ใช้ ไม่ให้คนถัดไปในเครื่องเดียวกันเห็นร่างของคนอื่น
+    return 'ktt.daily-draft.' + this.userId + '.' + (this.report()?.id ?? this.reportId() ?? 'new-' + this.projectId());
   }
 
   /** สิ่งที่ผู้ใช้กรอก (ใช้เทียบว่ามีอะไรยังไม่บันทึก) */
@@ -314,7 +335,8 @@ export class DailyReportPage implements OnInit, OnDestroy {
     const snap = this.snapshot();
     if (snap === this.baseline) return;
     try {
-      localStorage.setItem(this.draftKey(), JSON.stringify({ at: Date.now(), ...JSON.parse(snap) }));
+      // base = ข้อมูลในระบบตอนเริ่มแก้ ใช้ตรวจว่ามีคนแก้รายงานในระบบหลังจากนั้นหรือไม่
+      localStorage.setItem(this.draftKey(), JSON.stringify({ at: Date.now(), base: this.baseline, ...JSON.parse(snap) }));
     } catch {
       // เบราว์เซอร์ไม่ให้ใช้พื้นที่เก็บ (โหมดส่วนตัว) ข้ามได้
     }
@@ -333,16 +355,36 @@ export class DailyReportPage implements OnInit, OnDestroy {
     try {
       const raw = localStorage.getItem(this.draftKey());
       if (!raw) return;
-      const d = JSON.parse(raw) as { at: number; m: DailyReportSave; entries: { taskId: string; pct: number | null; note: string }[] };
+      const d = JSON.parse(raw) as { at: number; base?: string; m: DailyReportSave; entries: { taskId: string; pct: number | null; note: string }[] };
       if (!this.report() && d.m.reportDate !== this.m.reportDate) return;
-      this.m = { ...this.m, ...d.m };
-      const map = new Map(d.entries.map((e) => [e.taskId, e]));
-      this.entries.set(this.entries().map((e) => (map.has(e.task.id) ? { ...e, pct: map.get(e.task.id)!.pct, note: map.get(e.task.id)!.note } : e)));
-      this.restored.set(true);
-      this.tick();
+      if (JSON.stringify({ m: d.m, entries: d.entries }) === this.baseline) {
+        this.clearDraft(this.draftKey());
+        return;
+      }
+      this.draft.set({ at: d.at, stale: !!this.report() && d.base !== undefined && d.base !== this.baseline, m: d.m, entries: d.entries });
     } catch {
       // ร่างเสียหาย ข้าม
     }
+  }
+
+  dateOf(ms: number): Date {
+    return new Date(ms);
+  }
+
+  applyDraft(): void {
+    const d = this.draft();
+    if (!d) return;
+    this.m = { ...this.m, ...d.m };
+    const map = new Map(d.entries.map((e) => [e.taskId, e]));
+    this.entries.set(this.entries().map((e) => (map.has(e.task.id) ? { ...e, pct: map.get(e.task.id)!.pct, note: map.get(e.task.id)!.note } : e)));
+    this.draft.set(null);
+    this.restored.set(true);
+    this.tick();
+  }
+
+  discardDraft(): void {
+    this.clearDraft(this.draftKey());
+    this.draft.set(null);
   }
 
   private loadTasks(projectId: string, r: DailyReport | null): void {

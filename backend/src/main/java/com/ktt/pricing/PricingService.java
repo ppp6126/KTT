@@ -291,6 +291,7 @@ public class PricingService {
     /** ค้นหาวัสดุ/ค่าแรง/เครื่องจักรเพื่อใส่ใน BOQ (ต้องมี cost.view เพราะ BOQ ใช้ต้นทุน) */
     @Transactional
     public List<PickItem> pick(String type, String q) {
+        requireCostView();
         String like = "%" + (q == null ? "" : q.trim().toLowerCase()) + "%";
         List<PickItem> out = new ArrayList<>();
         if (type == null || "material".equals(type)) {

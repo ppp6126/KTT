@@ -59,6 +59,15 @@ public class QuotationService {
 
     private static final Set<Integer> WHT = Set.of(0, 1, 2, 3, 5);
 
+    /** อัตราหัก ณ ที่จ่ายต้องเป็นจำนวนเต็มในชุดที่กำหนด (1.5 ไม่ผ่าน) */
+    static boolean validWht(BigDecimal pct) {
+        if (pct == null) {
+            return false;
+        }
+        BigDecimal n = pct.stripTrailingZeros();
+        return n.scale() <= 0 && WHT.contains(n.intValue());
+    }
+
     @Inject
     CurrentUser currentUser;
 
@@ -168,7 +177,7 @@ public class QuotationService {
 
         List<QuotationItem> items = new ArrayList<>();
         if (req.boqId() != null && !"manual".equals(req.mode())) {
-            BoqDtos.BoqDto boq = boqs.get(req.boqId());
+            BoqDtos.BoqDto boq = boqs.getWithCost(req.boqId());
             if (x.leadId != null && !x.leadId.equals(boq.leadId())) {
                 throw ApiException.badRequest("boq_lead_mismatch", "BOQ ไม่ได้อยู่ในลีดนี้");
             }
@@ -189,7 +198,7 @@ public class QuotationService {
         if (!x.isEditable()) {
             throw ApiException.conflict("not_editable", "ใบเสนอราคาที่ส่งหรือขออนุมัติแล้วแก้ไขไม่ได้ ให้สร้าง Revision ใหม่");
         }
-        if (!WHT.contains(req.whtPct().intValue()) || req.whtPct().scale() > 2) {
+        if (!validWht(req.whtPct())) {
             throw ApiException.badRequest("invalid_wht", "หัก ณ ที่จ่ายต้องเป็น 0, 1, 2, 3 หรือ 5%");
         }
         if (req.validUntil().isBefore(req.issueDate())) {
@@ -219,10 +228,19 @@ public class QuotationService {
         x.scopeOut = blankToNull(req.scopeOut());
         x.notes = blankToNull(req.notes());
 
+        boolean cost = currentUser.canViewCost();
+        // ผู้ไม่มีสิทธิ์ cost.view มองไม่เห็นต้นทุน: เก็บต้นทุนเดิมของแต่ละแถวไว้ (จับคู่ด้วย id) เพื่อไม่ให้กำไรหาย
+        Map<UUID, BigDecimal> keptCost = new HashMap<>();
+        if (!cost) {
+            for (QuotationItem old : QuotationItem.<QuotationItem>list("quotationId", x.id)) {
+                if (old.unitCost != null) {
+                    keptCost.put(old.id, old.unitCost);
+                }
+            }
+        }
         QuotationItem.delete("quotationId", x.id);
         List<QuotationItem> items = new ArrayList<>();
         int order = 0;
-        boolean cost = currentUser.canViewCost();
         BigDecimal costTotal = BigDecimal.ZERO;
         boolean hasCost = false;
         for (ItemInput in : req.items()) {
@@ -235,8 +253,9 @@ public class QuotationService {
                 it.quantity = Money.z(in.quantity());
                 it.unit = blankToNull(in.unit());
                 it.unitPrice = Money.round2(in.unitPrice());
-                // ผู้ไม่มีสิทธิ์ cost.view ส่งต้นทุนมาไม่ได้ (ใช้ค่าเดิมจาก BOQ ไม่ได้เช่นกัน จึงล้างทิ้ง)
-                it.unitCost = cost && in.unitCost() != null ? Money.round2(in.unitCost()) : null;
+                // ผู้ไม่มีสิทธิ์ cost.view ส่งต้นทุนมาไม่ได้ ใช้ต้นทุนเดิมของแถวนั้นแทน (แถวใหม่ไม่มีต้นทุน)
+                it.unitCost = cost ? (in.unitCost() != null ? Money.round2(in.unitCost()) : null)
+                        : (in.id() == null ? null : keptCost.get(in.id()));
                 if (it.unitCost != null) {
                     hasCost = true;
                     costTotal = costTotal.add(Money.round2(it.unitCost.multiply(it.quantity)));
@@ -245,9 +264,7 @@ public class QuotationService {
             it.persist();
             items.add(it);
         }
-        if (cost) {
-            x.costTotal = hasCost ? costTotal : null;
-        }
+        x.costTotal = hasCost ? costTotal : null;
         recalc(x, items);
         var d = audit.diff(before, auditView(x));
         audit.log("quotation", x.id, AuditService.ACTION_UPDATE, d[0], d[1]);
@@ -279,7 +296,7 @@ public class QuotationService {
             x.status = Quotation.PENDING_APPROVAL;
             notifications.notifyAll(notifications.usersWithPermission(Perm.QUOTATION_APPROVE), "approval_request",
                     "ขออนุมัติส่วนลด " + x.discountPct.stripTrailingZeros().toPlainString() + "%: " + x.displayNo(),
-                    x.customerName, "/approvals", "quotation", x.id);
+                    x.customerName, "/approvals", "approval", a.id);
             audit.log("quotation", x.id, AuditService.ACTION_UPDATE, Map.of("status", Quotation.DRAFT),
                     Map.of("status", x.status, "reason", a.reason));
             return toDto(x, items);
@@ -403,7 +420,7 @@ public class QuotationService {
                 continue;
             }
             out.add(new PendingApproval(a.id, x.id, x.displayNo(), x.customerName, x.title, x.discountPct, x.totalAmount,
-                    margin(x), names.get(a.requestedBy), a.createdAt));
+                    currentUser.canViewCost() ? margin(x) : null, names.get(a.requestedBy), a.createdAt));
         }
         return out;
     }

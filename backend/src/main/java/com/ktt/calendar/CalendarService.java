@@ -78,6 +78,11 @@ public class CalendarService {
         if (want(src, "event")) {
             List<CalendarEvent> ev = CalendarEvent.list("startsAt < ?1 and coalesce(endsAt, startsAt) >= ?2 and (isPrivate = false or createdBy = ?3) order by startsAt",
                     toI, fromI, me);
+            if (!currentUser.can(Perm.PROJECT_READ_ALL)) {
+                // นัดหมายที่ผูกกับโครงการ แสดงเฉพาะโครงการที่ผู้ใช้เห็น (หรือที่ตัวเองสร้าง)
+                java.util.Set<UUID> vis = new java.util.HashSet<>(projects.visibleProjectIds());
+                ev = ev.stream().filter(e -> e.projectId == null || vis.contains(e.projectId) || me.equals(e.createdBy)).toList();
+            }
             Map<UUID, String> codes = projectCodes(ev.stream().map(e -> e.projectId).toList());
             for (CalendarEvent e : ev) {
                 out.add(new Item("ev:" + e.id, "event", e.kind, e.title, e.location, e.startsAt.atZone(DocNumberService.BANGKOK).toLocalDate(),
@@ -119,21 +124,23 @@ public class CalendarService {
             rows("""
                     select 'qe:' || q.id, 'quotation_expiry', 'ใบเสนอราคาหมดอายุ ' || q.doc_no, c.name, q.valid_until, '/quotations/' || q.id, null, q.total_amount
                     from quotations q join customers c on c.id = q.customer_id
-                    where q.deleted_at is null and q.status in ('sent', 'viewed') and q.valid_until between :f and :t""",
-                    from, to, false, out, "sales");
+                    where q.deleted_at is null and q.status in ('sent', 'viewed') and q.valid_until between :f and :t""" + (currentUser.can(Perm.LEAD_READ_ALL) ? "" : """
+                     and (q.created_by = :me or q.lead_id in (select l.id from leads l where l.owner_id = :me or l.created_by = :me))"""),
+                    from, to, false, out, "sales", currentUser.can(Perm.LEAD_READ_ALL) ? Map.of() : Map.of("me", me));
         }
         if (want(src, "finance") && (currentUser.can(Perm.FINANCE_READ) || currentUser.can(Perm.CONTRACT_READ))) {
             rows("""
                     select 'cm:' || m.id, 'milestone_due', 'งวดงาน ' || m.name, p.code || ' ' || p.name, m.due_date, '/projects/' || p.id || '/contract', p.code, m.amount
                     from contract_milestones m join contracts k on k.id = m.contract_id join projects p on p.id = k.project_id
-                    where m.status in ('pending', 'ready') and k.deleted_at is null and m.due_date between :f and :t""",
-                    from, to, false, out, "finance");
+                    where m.status in ('pending', 'ready') and k.deleted_at is null and m.due_date between :f and :t""" + projScope,
+                    from, to, true, out, "finance");
         }
         if (want(src, "finance") && currentUser.can(Perm.FINANCE_READ)) {
             rows("""
                     select 'ar:' || d.id, 'receivable_due', 'ลูกหนี้ครบกำหนด ' || d.doc_no, d.customer_name, d.due_date, '/finance/docs/' || d.id, null, d.net_amount - d.settled_amount
                     from sales_docs d where d.deleted_at is null and d.doc_type in ('invoice', 'invoice_tax') and d.status in ('issued', 'partial')
-                    and d.due_date between :f and :t""", from, to, false, out, "finance");
+                    and d.due_date between :f and :t""" + (currentUser.can(Perm.PROJECT_READ_ALL) ? "" : " and (d.project_id is null or d.project_id in (:vis))"),
+                    from, to, true, out, "finance");
         }
         if (want(src, "finance") && currentUser.can(Perm.AP_READ)) {
             rows("""
@@ -176,8 +183,14 @@ public class CalendarService {
     /** คอลัมน์: id, kind, title, subtitle, date, link, projectCode, amount */
     @SuppressWarnings("unchecked")
     private void rows(String sql, LocalDate from, LocalDate to, boolean scoped, List<Item> out, String source) {
+        rows(sql, from, to, scoped, out, source, Map.of());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void rows(String sql, LocalDate from, LocalDate to, boolean scoped, List<Item> out, String source, Map<String, Object> extra) {
         Query q = em.createNativeQuery(sql).setParameter("f", from).setParameter("t", to);
-        if (scoped && !currentUser.can(Perm.PROJECT_READ_ALL)) {
+        extra.forEach(q::setParameter);
+        if (scoped && !currentUser.can(Perm.PROJECT_READ_ALL) && sql.contains(":vis")) {
             q.setParameter("vis", projects.visibleProjectIds());
         }
         for (Object o : q.getResultList()) {

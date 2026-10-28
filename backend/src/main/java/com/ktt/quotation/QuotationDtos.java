@@ -38,7 +38,8 @@ public final class QuotationDtos {
             @DecimalMin(value = "0", message = "จำนวนต้องไม่ติดลบ") BigDecimal quantity,
             @Size(max = 30) String unit,
             @DecimalMin(value = "0", message = "ราคาต้องไม่ติดลบ") BigDecimal unitPrice,
-            BigDecimal unitCost) {
+            BigDecimal unitCost,
+            UUID id) {
     }
 
     public record UpdateRequest(

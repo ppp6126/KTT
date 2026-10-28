@@ -22,9 +22,23 @@ jobs:
       - name: Compile + unit tests
         run: mvn -B -ntp test
       - name: Integration test - auth flow (PostgreSQL via Dev Services)
-        run: mvn -B -ntp test -Dtest=AuthFlowIT -Dsurefire.failIfNoSpecifiedTests=false
+        run: mvn -B -ntp test -Dtest=AuthFlowIT -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tee it-auth.log; exit ${PIPESTATUS[0]}
       - name: Integration test - all phases API smoke + backup
-        run: mvn -B -ntp test -Dtest=ApiSmokeIT -Dsurefire.failIfNoSpecifiedTests=false
+        if: always()
+        run: mvn -B -ntp test -Dtest=ApiSmokeIT -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tee it-smoke.log; exit ${PIPESTATUS[0]}
+      - name: Report failures as annotations
+        if: failure()
+        run: |
+          for f in it-auth.log it-smoke.log; do
+            [ -f "$f" ] || continue
+            grep -nE "ERROR|Caused by|Exception|expected|FAIL|Tests run" "$f" | grep -v "^.*DEBUG" | head -c 30000 > "$f.err" || true
+            split -b 3500 "$f.err" "$f.part." || true
+            for p in "$f".part.*; do
+              [ -f "$p" ] || continue
+              msg=$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' "$p")
+              echo "::error title=$f::$msg"
+            done
+          done
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

@@ -176,7 +176,7 @@ public class BackupService {
     /** ใช้โดยงานตั้งเวลา: ไม่ตรวจสิทธิ์ */
     public UUID export(String kind, UUID userId, boolean includeFiles) {
         UUID runId = runLog.start(kind, userId);
-        String stamp = LocalDateTime.now(DocNumberService.BANGKOK).format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String stamp = LocalDateTime.now(DocNumberService.BANGKOK).format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS"));
         String fileName = "ktt-backup-" + stamp + (includeFiles ? "-files" : "") + ".zip";
         Path tmp = null;
         try {
@@ -220,7 +220,7 @@ public class BackupService {
                 zip.closeEntry();
             }
             Path target = dir().resolve(fileName);
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE); // ไม่ทับไฟล์เดิม (ชื่อมีมิลลิวินาที)
             runLog.finish(runId, "ok", fileName, Files.size(target), tables, rows, null);
             LOG.infof("backup %s: %d tables, %d rows", fileName, tables, rows);
         } catch (Exception e) {
@@ -284,6 +284,10 @@ public class BackupService {
                     List<String> vals = new ArrayList<>(keep.size());
                     for (int i : keep) {
                         Object v = rs.getObject(i);
+                        if (v instanceof java.sql.Timestamp && "timestamptz".equalsIgnoreCase(md.getColumnTypeName(i))) {
+                            // เขียนพร้อม offset ไม่ขึ้นกับเขตเวลาของเครื่อง
+                            v = rs.getObject(i, java.time.OffsetDateTime.class);
+                        }
                         vals.add(v == null ? null : v instanceof java.sql.Array a ? CsvWriter.array(a.getArray()) : v.toString());
                     }
                     w.write(CsvWriter.line(vals));
