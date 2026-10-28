@@ -30,7 +30,8 @@ import jakarta.ws.rs.core.Response;
 import java.time.LocalDate;
 import java.util.UUID;
 
-@Path("/api/ap")
+// ไม่ใช้ @Path("/api/ap") ระดับคลาส: RESTEasy Reactive จับ /api/ap เป็น prefix ของ /api/approvals ทำให้หน้าอนุมัติใบเสนอราคา 404
+@Path("/api")
 @Produces(MediaType.APPLICATION_JSON)
 public class ApResource {
 
@@ -41,7 +42,7 @@ public class ApResource {
     }
 
     @GET
-    @Path("/bills")
+    @Path("/ap/bills")
     @RolesAllowed(Perm.AP_READ)
     public PageResult<BillRow> bills(@QueryParam("status") String status, @QueryParam("supplierId") UUID supplierId,
                                      @QueryParam("projectId") UUID projectId, @QueryParam("q") String q,
@@ -52,49 +53,49 @@ public class ApResource {
     }
 
     @GET
-    @Path("/bills/{id}")
+    @Path("/ap/bills/{id}")
     @RolesAllowed(Perm.AP_READ)
     public BillDto bill(@PathParam("id") UUID id) {
         return service.getBill(id);
     }
 
     @POST
-    @Path("/bills")
+    @Path("/ap/bills")
     @RolesAllowed(Perm.AP_WRITE)
     public Response create(@Valid BillRequest req) {
         return Response.status(201).entity(service.createBill(req)).build();
     }
 
     @POST
-    @Path("/bills/from-po/{poId}")
+    @Path("/ap/bills/from-po/{poId}")
     @RolesAllowed(Perm.AP_WRITE)
     public Response fromPo(@PathParam("poId") UUID poId) {
         return Response.status(201).entity(service.fromPo(poId)).build();
     }
 
     @PUT
-    @Path("/bills/{id}")
+    @Path("/ap/bills/{id}")
     @RolesAllowed(Perm.AP_WRITE)
     public BillDto update(@PathParam("id") UUID id, @Valid BillRequest req) {
         return service.updateBill(id, req);
     }
 
     @POST
-    @Path("/bills/{id}/approve")
+    @Path("/ap/bills/{id}/approve")
     @RolesAllowed(Perm.AP_APPROVE)
     public BillDto approve(@PathParam("id") UUID id) {
         return service.approveBill(id);
     }
 
     @POST
-    @Path("/bills/{id}/void")
+    @Path("/ap/bills/{id}/void")
     @RolesAllowed(Perm.AP_APPROVE)
     public BillDto voidBill(@PathParam("id") UUID id, @Valid ReasonRequest req) {
         return service.voidBill(id, req == null ? null : req.reason());
     }
 
     @DELETE
-    @Path("/bills/{id}")
+    @Path("/ap/bills/{id}")
     @RolesAllowed(Perm.AP_WRITE)
     public Response delete(@PathParam("id") UUID id) {
         service.deleteBill(id);
@@ -102,7 +103,7 @@ public class ApResource {
     }
 
     @GET
-    @Path("/vouchers")
+    @Path("/ap/vouchers")
     @RolesAllowed(Perm.AP_READ)
     public PageResult<PvRow> vouchers(@QueryParam("status") String status, @QueryParam("supplierId") UUID supplierId,
                                       @QueryParam("page") @DefaultValue("0") @Min(0) int page,
@@ -111,42 +112,42 @@ public class ApResource {
     }
 
     @GET
-    @Path("/vouchers/{id}")
+    @Path("/ap/vouchers/{id}")
     @RolesAllowed(Perm.AP_READ)
     public PvDto voucher(@PathParam("id") UUID id) {
         return service.getPv(id);
     }
 
     @POST
-    @Path("/vouchers")
+    @Path("/ap/vouchers")
     @RolesAllowed(Perm.AP_WRITE)
     public Response createPv(@Valid PvRequest req) {
         return Response.status(201).entity(service.createPv(req)).build();
     }
 
     @POST
-    @Path("/vouchers/{id}/approve")
+    @Path("/ap/vouchers/{id}/approve")
     @RolesAllowed(Perm.AP_APPROVE)
     public PvDto approvePv(@PathParam("id") UUID id) {
         return service.approvePv(id);
     }
 
     @POST
-    @Path("/vouchers/{id}/pay")
+    @Path("/ap/vouchers/{id}/pay")
     @RolesAllowed(Perm.AP_WRITE)
     public PvDto pay(@PathParam("id") UUID id, PayRequest req) {
         return service.payPv(id, req == null ? null : req.paidDate(), req == null ? null : req.bankRef());
     }
 
     @POST
-    @Path("/vouchers/{id}/void")
+    @Path("/ap/vouchers/{id}/void")
     @RolesAllowed(Perm.AP_APPROVE)
     public PvDto voidPv(@PathParam("id") UUID id, @Valid ReasonRequest req) {
         return service.voidPv(id, req == null ? null : req.reason());
     }
 
     @GET
-    @Path("/wht-certificates/{id}")
+    @Path("/ap/wht-certificates/{id}")
     @RolesAllowed({Perm.AP_READ, Perm.TAX_REPORT})
     public CertDto certificate(@PathParam("id") UUID id) {
         return service.certificate(id);
