@@ -25,6 +25,9 @@ public class SalesDoc extends BaseEntity {
     public static final String TAX_RECEIPT = "tax_receipt";
     public static final String CREDIT_NOTE = "credit_note";
 
+    /** ใบเสร็จรับคืนเงินประกันผลงาน (ไม่อ้างอิงใบแจ้งหนี้) */
+    public static final String KIND_RETENTION = "retention";
+
     public static final Set<String> INVOICES = Set.of(INVOICE, INVOICE_TAX);
     /** เอกสารที่เป็นใบกำกับภาษี (ใบลดหนี้อ้างอิงได้) */
     public static final Set<String> TAX_DOCS = Set.of(INVOICE_TAX, TAX_RECEIPT);

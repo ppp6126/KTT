@@ -35,6 +35,7 @@ import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 
 import java.math.BigDecimal;
@@ -268,7 +269,19 @@ public class SalesDocService {
                 }
             }
             // หักคืนเงินล่วงหน้าตามสัดส่วนเฉพาะงวดตามสัญญา (งวด VO ไม่หัก)
-            d.advanceDeduct = c.advancePct.signum() > 0 ? Money.pct(base, c.advancePct) : BigDecimal.ZERO;
+            // งวดสุดท้าย (วางบิลงวดตามสัญญาที่เหลือครบ) หักส่วนที่เหลือทั้งหมดให้รวมได้เท่าเงินล่วงหน้าที่เรียกเก็บ
+            Set<UUID> requested = new HashSet<>(req.milestoneIds());
+            boolean lastBilling = ContractMilestone.listFor(c.id).stream()
+                    .filter(m -> m.changeOrderId == null && !requested.contains(m.id))
+                    .noneMatch(m -> ("ready".equals(m.status) || "pending".equals(m.status)) && !billedMilestone(m.id, null));
+            Object[] adv = (Object[]) em.createNativeQuery("""
+                            select coalesce(sum(taxable_amount) filter (where kind = 'advance'), 0),
+                                   coalesce(sum(advance_deduct) filter (where kind <> 'advance'), 0)
+                            from sales_docs where contract_id = ?1 and doc_type in ('invoice', 'invoice_tax')
+                              and status <> 'void' and deleted_at is null""").setParameter(1, c.id).getSingleResult();
+            d.advanceDeduct = base.signum() > 0 || lastBilling
+                    ? FinanceCalculator.advanceDeduction(base, c.advancePct, SqlValues.decimal0(adv[0]), SqlValues.decimal0(adv[1]), lastBilling)
+                    : BigDecimal.ZERO;
         }
         d.persist();
         List<SalesDocItem> items = writeItems(d, inputs);
@@ -282,7 +295,9 @@ public class SalesDocService {
 
     @Transactional
     public SalesDocDto issue(UUID id) {
-        SalesDoc d = requireWritable(id);
+        requireWrite();
+        lock(id);
+        SalesDoc d = requireVisible(id);
         if (!d.isDraft()) {
             throw ApiException.conflict("invalid_status", "เอกสารนี้ออกแล้ว");
         }
@@ -297,17 +312,38 @@ public class SalesDocService {
                         throw ApiException.conflict("milestone_billed", "งวดงาน \"" + it.description + "\" ถูกวางบิลในเอกสารอื่นแล้ว");
                     }
                     ContractMilestone m = ContractMilestone.findById(it.milestoneId);
+                    if (m == null) {
+                        throw ApiException.conflict("invalid_milestone", "ไม่พบงวดงาน \"" + it.description + "\" แล้ว");
+                    }
+                    if (!"ready".equals(m.status) && !"pending".equals(m.status)) {
+                        throw ApiException.conflict("milestone_billed", "งวดงาน \"" + it.description + "\" วางบิลแล้ว");
+                    }
+                    // มูลค่างวดอาจถูกแก้หลังสร้างฉบับร่าง → ต้องตรงกับยอดในใบแจ้งหนี้
+                    if (m.amount.compareTo(it.amount) != 0) {
+                        throw ApiException.conflict("milestone_changed", "มูลค่างวด \"" + m.name + "\" ในสัญญาเปลี่ยนเป็น "
+                                + m.amount.toPlainString() + " บาท แต่ในใบแจ้งหนี้เป็น " + it.amount.toPlainString()
+                                + " บาท กรุณาแก้ไขหรือสร้างใบแจ้งหนี้ใหม่");
+                    }
                     m.status = "billed";
                 }
             }
         }
+        SalesDoc creditRef = null;
         if (SalesDoc.CREDIT_NOTE.equals(d.docType)) {
-            SalesDoc ref = SalesDoc.findById(d.refDocId);
-            if (ref == null || "void".equals(ref.status)) {
+            creditRef = d.refDocId == null ? null : lock(d.refDocId);
+            if (creditRef == null || "void".equals(creditRef.status)) {
                 throw ApiException.conflict("invalid_ref", "ใบกำกับภาษีที่อ้างอิงถูกยกเลิกแล้ว");
             }
         }
-        d.docNo = docNumbers.next(prefix(d.docType), d.docDate);
+        d.docNo = nextNo(d.docType, d.docDate);
+        if (creditRef != null && SalesDoc.INVOICES.contains(creditRef.docType)
+                && Set.of("issued", "partial", "paid").contains(creditRef.status)) {
+            // ใบลดหนี้ลดยอดที่ลูกค้าต้องชำระของใบแจ้งหนี้/ใบกำกับภาษี (เก็บยอดที่ตัดไว้ใน settledAmount ของใบลดหนี้)
+            BigDecimal applied = d.totalAmount.min(creditRef.outstanding()).max(BigDecimal.ZERO);
+            d.settledAmount = Money.round2(applied);
+            creditRef.settledAmount = Money.round2(creditRef.settledAmount.add(applied));
+            refreshInvoiceStatus(creditRef);
+        }
         d.status = "issued";
         d.issuedAt = Instant.now();
         audit.log("sales_doc", d.id, AuditService.ACTION_UPDATE, Map.of("status", "draft"),
@@ -322,7 +358,9 @@ public class SalesDocService {
      */
     @Transactional
     public SalesDocDto recordPayment(UUID invoiceId, PaymentRequest req) {
-        SalesDoc inv = requireWritable(invoiceId);
+        requireWrite();
+        lock(invoiceId); // กันรับชำระซ้อนพร้อมกันจนเกินยอดค้าง
+        SalesDoc inv = requireVisible(invoiceId);
         if (!SalesDoc.INVOICES.contains(inv.docType) || !Set.of("issued", "partial").contains(inv.status)) {
             throw ApiException.conflict("invalid_status", "รับชำระได้เฉพาะใบแจ้งหนี้ที่ออกแล้วและยังค้างชำระ");
         }
@@ -346,7 +384,7 @@ public class SalesDocService {
         SalesDoc r = new SalesDoc();
         r.docType = taxReceipt ? SalesDoc.TAX_RECEIPT : SalesDoc.RECEIPT;
         r.docDate = req.paidDate();
-        r.docNo = docNumbers.next(prefix(r.docType), r.docDate);
+        r.docNo = nextNo(r.docType, r.docDate);
         r.status = "paid";
         r.customerId = inv.customerId;
         r.customerName = inv.customerName;
@@ -358,15 +396,24 @@ public class SalesDocService {
         r.refDocId = inv.id;
         r.kind = inv.kind;
         r.vatPct = inv.vatPct;
-        BigDecimal priorVat = (BigDecimal) em.createQuery("""
-                        select coalesce(sum(d.vatAmount), 0) from SalesDoc d
-                        where d.refDocId = ?1 and d.docType in ('receipt', 'tax_receipt') and d.status <> 'void'
-                        """, BigDecimal.class).setParameter(1, inv.id).getSingleResult();
-        BigDecimal vat = FinanceCalculator.vatPortion(settled, inv.totalAmount, inv.vatAmount, priorVat, isFinal);
+        // VAT เกิดเมื่อได้รับเงิน (เงินรับ + ภาษีหัก ณ ที่จ่าย) ส่วนเงินประกันที่ลูกค้ากันไว้ยังไม่เกิดภาษี
+        // → ออกใบกำกับส่วนนั้นตอนรับคืนเงินประกัน (ContractService.releaseRetention)
+        BigDecimal received = cash.add(wht);
+        BigDecimal priorVat = BigDecimal.ZERO;
+        BigDecimal priorRetentionVat = BigDecimal.ZERO;
+        for (SalesDoc x : SalesDoc.<SalesDoc>list("refDocId = ?1 and docType in ('receipt', 'tax_receipt', 'credit_note') and status not in ('void', 'draft')", inv.id)) {
+            priorVat = priorVat.add(x.vatAmount);
+            if (!SalesDoc.CREDIT_NOTE.equals(x.docType)) {
+                priorRetentionVat = priorRetentionVat.add(FinanceCalculator.retentionVat(x.retentionAmount, inv.totalAmount, inv.vatAmount));
+            }
+        }
+        BigDecimal vat = FinanceCalculator.vatPortion(received, retention, inv.totalAmount, inv.vatAmount, priorVat,
+                priorRetentionVat, isFinal);
         r.vatAmount = vat;
-        r.taxableAmount = settled.subtract(vat);
+        r.taxableAmount = received.subtract(vat);
         r.subtotal = r.taxableAmount;
-        r.totalAmount = settled;
+        // ใบเสร็จแสดงเฉพาะยอดที่ได้รับ; settledAmount = ยอดที่ตัดใบแจ้งหนี้ (รวมเงินประกันที่ลูกค้ากัน)
+        r.totalAmount = received;
         r.whtAmount = wht;
         r.whtPct = inv.whtPct;
         r.retentionAmount = retention;
@@ -391,18 +438,8 @@ public class SalesDocService {
         it.persist();
 
         inv.settledAmount = Money.round2(inv.settledAmount.add(settled));
-        inv.status = isFinal ? "paid" : "partial";
         inv.paidDate = req.paidDate();
-        if (isFinal) {
-            for (SalesDocItem li : SalesDocItem.listFor(inv.id)) {
-                if (li.milestoneId != null) {
-                    ContractMilestone m = ContractMilestone.findById(li.milestoneId);
-                    if (m != null) {
-                        m.status = "paid";
-                    }
-                }
-            }
-        }
+        refreshInvoiceStatus(inv);
         audit.log("sales_doc", inv.id, AuditService.ACTION_UPDATE, null,
                 Map.of("payment", settled, "receipt", r.docNo, "status", inv.status));
         return toDto(r);
@@ -520,6 +557,7 @@ public class SalesDocService {
         if (!currentUser.can(Perm.FINANCE_VOID)) {
             throw ApiException.forbidden("forbidden", "คุณไม่มีสิทธิ์ยกเลิกเอกสาร");
         }
+        lock(id);
         SalesDoc d = requireVisible(id);
         if (d.isDraft()) {
             throw ApiException.conflict("is_draft", "ฉบับร่างให้ลบแทนการยกเลิก");
@@ -542,27 +580,44 @@ public class SalesDocService {
                     }
                 }
             }
+            detachFromBillingNotes(d);
         }
-        if (Set.of(SalesDoc.RECEIPT, SalesDoc.TAX_RECEIPT).contains(d.docType) && d.refDocId != null) {
+        if (Set.of(SalesDoc.RECEIPT, SalesDoc.TAX_RECEIPT).contains(d.docType)) {
             Number deps = (Number) em.createNativeQuery("""
                             select count(*) from sales_docs where ref_doc_id = ?1 and doc_type = 'credit_note' and status <> 'void' and deleted_at is null
                             """).setParameter(1, d.id).getSingleResult();
             if (deps.longValue() > 0) {
                 throw ApiException.conflict("has_credit", "ใบเสร็จนี้มีใบลดหนี้อ้างอิงอยู่ ให้ยกเลิกใบลดหนี้ก่อน");
             }
+        }
+        if (Set.of(SalesDoc.RECEIPT, SalesDoc.TAX_RECEIPT).contains(d.docType) && d.refDocId != null) {
+            if (d.contractId != null && d.retentionAmount.signum() > 0) {
+                Contract c = Contract.findById(d.contractId);
+                if (c != null && contracts.retentionWithheld(c.id).subtract(d.retentionAmount).compareTo(c.retentionReleased) < 0) {
+                    throw ApiException.conflict("retention_released", "เงินประกันผลงานในใบเสร็จนี้รับคืนไปแล้ว ให้ยกเลิกใบเสร็จรับคืนเงินประกันก่อน");
+                }
+            }
             // คืนยอดค้างให้ใบแจ้งหนี้
-            SalesDoc inv = SalesDoc.findById(d.refDocId);
+            SalesDoc inv = lock(d.refDocId);
             if (inv != null && !"void".equals(inv.status)) {
                 inv.settledAmount = Money.round2(inv.settledAmount.subtract(d.settledAmount)).max(BigDecimal.ZERO);
-                inv.status = inv.settledAmount.signum() == 0 ? "issued" : "partial";
-                for (SalesDocItem li : SalesDocItem.listFor(inv.id)) {
-                    if (li.milestoneId != null) {
-                        ContractMilestone m = ContractMilestone.findById(li.milestoneId);
-                        if (m != null && "paid".equals(m.status)) {
-                            m.status = "billed";
-                        }
-                    }
-                }
+                refreshInvoiceStatus(inv);
+            }
+        }
+        if (Set.of(SalesDoc.RECEIPT, SalesDoc.TAX_RECEIPT).contains(d.docType) && d.refDocId == null
+                && SalesDoc.KIND_RETENTION.equals(d.kind) && d.contractId != null) {
+            // ใบเสร็จรับคืนเงินประกันผลงาน → คืนยอดเงินประกันที่ยังไม่ได้รับ
+            Contract c = Contract.findById(d.contractId);
+            if (c != null) {
+                c.retentionReleased = Money.round2(c.retentionReleased.subtract(d.settledAmount)).max(BigDecimal.ZERO);
+            }
+        }
+        if (SalesDoc.CREDIT_NOTE.equals(d.docType) && d.refDocId != null && d.settledAmount.signum() > 0) {
+            // คืนยอดที่ใบลดหนี้เคยตัดออกจากใบแจ้งหนี้
+            SalesDoc inv = lock(d.refDocId);
+            if (inv != null && SalesDoc.INVOICES.contains(inv.docType) && !"void".equals(inv.status)) {
+                inv.settledAmount = Money.round2(inv.settledAmount.subtract(d.settledAmount)).max(BigDecimal.ZERO);
+                refreshInvoiceStatus(inv);
             }
         }
         String from = d.status;
@@ -616,29 +671,27 @@ public class SalesDocService {
             b[bucket] = b[bucket].add(amt);
             b[5] = b[5].add(amt);
         }
-        // เงินประกันผลงานที่ลูกค้ากันไว้ (ยังไม่คืน) ต่อสัญญา → รวมตามลูกค้า
+        // เงินประกันผลงานที่ลูกค้ากันไว้จริงในใบเสร็จ (ยังไม่คืน) ต่อสัญญา → รวมตามลูกค้า เฉพาะโครงการที่มองเห็น
         @SuppressWarnings("unchecked")
         List<Object[]> ret = em.createNativeQuery("""
-                        select c.customer_id, c.customer_name,
+                        select c.customer_id, c.customer_name, c.project_id,
                                coalesce((select sum(d.retention_amount) from sales_docs d where d.contract_id = c.id
-                                         and d.doc_type in ('invoice', 'invoice_tax') and d.status not in ('draft', 'void') and d.deleted_at is null), 0)
+                                         and d.doc_type in ('receipt', 'tax_receipt') and d.kind <> 'retention'
+                                         and d.status <> 'void' and d.deleted_at is null), 0)
                                - c.retention_released
                         from contracts c where c.deleted_at is null
                         """).getResultList();
         Set<UUID> visible = currentUser.can(Perm.PROJECT_READ_ALL) ? null : new HashSet<>(projects.visibleProjectIds());
         for (Object[] r : ret) {
-            BigDecimal held = SqlValues.decimal0(r[2]);
+            BigDecimal held = SqlValues.decimal0(r[3]);
             if (held.signum() <= 0) {
                 continue;
             }
-            UUID cid = SqlValues.uuid(r[0]);
-            if (visible != null) {
-                Number n = (Number) em.createNativeQuery("select count(*) from contracts where customer_id = ?1 and project_id in (:ids) and deleted_at is null")
-                        .setParameter(1, cid).setParameter("ids", visible).getSingleResult();
-                if (n.longValue() == 0) {
-                    continue;
-                }
+            UUID pid = SqlValues.uuid(r[2]);
+            if (visible != null && !visible.contains(pid)) {
+                continue;
             }
+            UUID cid = SqlValues.uuid(r[0]);
             names.putIfAbsent(cid, (String) r[1]);
             BigDecimal[] b = by.computeIfAbsent(cid, k -> zeros(7));
             b[6] = b[6].add(held);
@@ -667,6 +720,141 @@ public class SalesDocService {
     }
 
     // ================================================================= internals
+
+    /** ล็อกแถวเอกสาร (SELECT ... FOR UPDATE) ก่อนอ่านยอด เพื่อกันการรับชำระ/ยกเลิก/ลดหนี้ซ้อนกัน */
+    private static SalesDoc lock(UUID id) {
+        return id == null ? null : SalesDoc.findById(id, LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    /**
+     * ออกเลขที่เอกสาร: เลขต้องเรียงตามวันที่ → ห้ามออกเอกสารย้อนวันก่อนเอกสารชุดเลขเดียวกันที่ออกไปแล้ว
+     * (ล็อกตาม prefix ให้การตรวจวันที่กับการรันเลขเป็นลำดับเดียวกัน)
+     */
+    private String nextNo(String docType, LocalDate date) {
+        String prefix = prefix(docType);
+        em.createNativeQuery("select 1 from (select pg_advisory_xact_lock(hashtext(?1))) x")
+                .setParameter(1, "sales_doc_no:" + prefix).getSingleResult();
+        Set<String> types = new HashSet<>();
+        for (String t : SalesDoc.DEFAULT_PREFIX.keySet()) {
+            if (prefix.equals(prefix(t))) {
+                types.add(t);
+            }
+        }
+        types.add(docType);
+        LocalDate last = em.createQuery("select max(d.docDate) from SalesDoc d where d.docType in :types and d.status <> 'draft'",
+                LocalDate.class).setParameter("types", types).getSingleResult();
+        if (last != null && date.isBefore(last)) {
+            throw ApiException.badRequest("doc_date_order", "วันที่เอกสาร " + thaiDate(date) + " ก่อนวันที่ของ"
+                    + SalesDoc.TITLES.get(docType) + "ฉบับล่าสุดที่ออกไปแล้ว (" + thaiDate(last)
+                    + ") เลขที่เอกสารต้องเรียงตามวันที่ กรุณาใช้วันที่ตั้งแต่ " + thaiDate(last) + " เป็นต้นไป");
+        }
+        return docNumbers.next(prefix, date);
+    }
+
+    private static String thaiDate(LocalDate d) {
+        return d.getDayOfMonth() + "/" + d.getMonthValue() + "/" + (d.getYear() + 543);
+    }
+
+    /** สถานะใบแจ้งหนี้ตามยอดค้าง (รวมเงินที่ตัดด้วยใบลดหนี้) และสถานะงวดงานในใบ */
+    private static void refreshInvoiceStatus(SalesDoc inv) {
+        boolean paid = inv.outstanding().signum() <= 0;
+        inv.status = paid ? "paid" : inv.settledAmount.signum() == 0 ? "issued" : "partial";
+        for (SalesDocItem li : SalesDocItem.listFor(inv.id)) {
+            if (li.milestoneId != null) {
+                ContractMilestone m = ContractMilestone.findById(li.milestoneId);
+                if (m == null) {
+                    continue;
+                }
+                if (paid && "billed".equals(m.status)) {
+                    m.status = "paid";
+                } else if (!paid && "paid".equals(m.status)) {
+                    m.status = "billed";
+                }
+            }
+        }
+    }
+
+    /** ใบแจ้งหนี้ถูกยกเลิก → ตัดยอดออกจากใบวางบิลที่รวมใบนี้ไว้ และบันทึกหมายเหตุให้เห็น */
+    private void detachFromBillingNotes(SalesDoc inv) {
+        @SuppressWarnings("unchecked")
+        List<Object> ids = em.createNativeQuery("""
+                        select l.billing_note_id from billing_note_lines l join sales_docs b on b.id = l.billing_note_id
+                        where l.invoice_id = ?1 and b.deleted_at is null and b.status <> 'void'""").setParameter(1, inv.id).getResultList();
+        BigDecimal net = inv.netAmount.subtract(inv.settledAmount.min(inv.netAmount));
+        for (Object o : ids) {
+            SalesDoc bn = lock(SqlValues.uuid(o));
+            if (bn == null) {
+                continue;
+            }
+            bn.totalAmount = Money.round2(bn.totalAmount.subtract(inv.outstanding())).max(BigDecimal.ZERO);
+            bn.subtotal = bn.totalAmount;
+            bn.netAmount = Money.round2(bn.netAmount.subtract(net)).max(BigDecimal.ZERO);
+            bn.notes = (bn.notes == null ? "" : bn.notes + "\n") + "ใบแจ้งหนี้ " + inv.docNo + " ถูกยกเลิก ปรับยอดวางบิลแล้ว";
+            audit.log("sales_doc", bn.id, AuditService.ACTION_UPDATE, null, Map.of("voidedInvoice", inv.docNo, "total", bn.totalAmount));
+        }
+    }
+
+    /**
+     * ใบเสร็จรับคืนเงินประกันผลงาน (เรียกจาก ContractService.releaseRetention)
+     * เงินประกันที่ลูกค้ากันไว้จากใบเสร็จรับเงิน/ใบกำกับภาษี ยังไม่ได้ออก VAT → ออกใบเสร็จรับเงิน/ใบกำกับภาษีพร้อม VAT ส่วนนั้น
+     */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public SalesDoc issueRetentionReceipt(Contract c, BigDecimal amount, LocalDate date) {
+        Object[] pend = (Object[]) em.createNativeQuery("""
+                        select
+                          coalesce((select sum(r.retention_amount) from sales_docs r
+                                    where r.contract_id = ?1 and r.doc_type = 'tax_receipt' and r.kind <> 'retention'
+                                      and r.status <> 'void' and r.deleted_at is null), 0)
+                          - coalesce((select sum(r.retention_amount) from sales_docs r
+                                    where r.contract_id = ?1 and r.kind = 'retention' and r.status <> 'void' and r.deleted_at is null), 0),
+                          coalesce((select sum(round(r.retention_amount * i.vat_amount / i.total_amount, 2)) from sales_docs r
+                                    join sales_docs i on i.id = r.ref_doc_id
+                                    where r.contract_id = ?1 and r.doc_type = 'tax_receipt' and r.kind <> 'retention'
+                                      and r.status <> 'void' and r.deleted_at is null and i.total_amount > 0), 0)
+                          - coalesce((select sum(r.vat_amount) from sales_docs r
+                                    where r.contract_id = ?1 and r.kind = 'retention' and r.status <> 'void' and r.deleted_at is null), 0)
+                        """).setParameter(1, c.id).getSingleResult();
+        BigDecimal pendingBase = SqlValues.decimal0(pend[0]);
+        BigDecimal pendingVat = SqlValues.decimal0(pend[1]);
+        BigDecimal vat = FinanceCalculator.retentionReleaseVat(amount, pendingBase, pendingVat);
+        SalesDoc r = new SalesDoc();
+        r.docType = vat.signum() > 0 ? SalesDoc.TAX_RECEIPT : SalesDoc.RECEIPT;
+        r.docDate = date;
+        r.docNo = nextNo(r.docType, date);
+        r.status = "paid";
+        r.customerId = c.customerId;
+        r.customerName = c.customerName;
+        r.customerAddress = c.customerAddress;
+        r.customerTaxId = c.customerTaxId;
+        r.customerBranchNo = c.customerBranchNo;
+        r.projectId = c.projectId;
+        r.contractId = c.id;
+        r.kind = SalesDoc.KIND_RETENTION;
+        r.vatPct = vat.signum() > 0 ? c.vatPct : BigDecimal.ZERO;
+        r.vatAmount = vat;
+        r.taxableAmount = Money.round2(amount.subtract(vat));
+        r.subtotal = r.taxableAmount;
+        r.totalAmount = Money.round2(amount);
+        r.netAmount = r.totalAmount;
+        r.settledAmount = r.totalAmount;
+        // ส่วนของเงินประกันที่เลื่อน VAT ไว้ซึ่งใบนี้ออกภาษีให้แล้ว
+        r.retentionAmount = Money.round2(amount.min(pendingBase.max(BigDecimal.ZERO)));
+        r.paidDate = date;
+        r.issuedAt = Instant.now();
+        r.createdBy = currentUser.id();
+        r.persist();
+        SalesDocItem it = new SalesDocItem();
+        it.docId = r.id;
+        it.sortOrder = 1;
+        it.description = "รับคืนเงินประกันผลงานตามสัญญาเลขที่ " + c.docNo + (c.projectId == null ? "" : " " + projectName(c.projectId));
+        it.quantity = BigDecimal.ONE;
+        it.unitPrice = r.taxableAmount;
+        it.amount = r.taxableAmount;
+        it.persist();
+        audit.log("sales_doc", r.id, AuditService.ACTION_CREATE, null,
+                Map.of("type", r.docType, "kind", r.kind, "contract", c.docNo, "total", r.totalAmount));
+        return r;
+    }
 
     private void linkParties(SalesDoc d, UUID customerId, UUID contractId, UUID projectId) {
         if (contractId != null) {

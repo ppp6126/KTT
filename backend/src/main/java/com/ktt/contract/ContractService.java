@@ -27,6 +27,7 @@ import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Parameters;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -67,6 +68,10 @@ public class ContractService {
 
     @Inject
     EntityManager em;
+
+    /** ใช้ออกใบเสร็จรับคืนเงินประกัน (โหลดแบบ lazy เพราะ SalesDocService ก็ใช้ ContractService) */
+    @Inject
+    Instance<com.ktt.finance.SalesDocService> salesDocs;
 
     // ================================================================= access
 
@@ -444,17 +449,20 @@ public class ContractService {
 
     @Transactional
     public ContractDto releaseRetention(UUID id, BigDecimal amount) {
+        // ล็อกสัญญาก่อนอ่านยอด กันบันทึกรับคืนซ้อนกันจนเกินยอดที่ลูกค้ากันไว้
+        Contract.findById(id, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         Contract c = requireVisible(id);
         if (!currentUser.can(Perm.FINANCE_WRITE)) {
             throw ApiException.forbidden("forbidden", "คุณไม่มีสิทธิ์บันทึกการคืนเงินประกันผลงาน");
         }
-        Financials f = financials(c);
-        BigDecimal held = f.retentionHeld();
+        BigDecimal held = Money.round2(retentionWithheld(c.id).subtract(c.retentionReleased));
         if (amount.compareTo(held) > 0) {
-            throw ApiException.badRequest("over_release", "คืนได้ไม่เกินเงินประกันที่ลูกค้ากันไว้ " + held.toPlainString() + " บาท");
+            throw ApiException.badRequest("over_release", "คืนได้ไม่เกินเงินประกันที่ลูกค้ากันไว้จริงในใบเสร็จ " + held.toPlainString() + " บาท");
         }
-        c.retentionReleased = Money.round2(c.retentionReleased.add(amount));
-        audit.log("contract", c.id, AuditService.ACTION_UPDATE, null, Map.of("retentionReleased", amount));
+        BigDecimal amt = Money.round2(amount);
+        var receipt = salesDocs.get().issueRetentionReceipt(c, amt, DocNumberService.today());
+        c.retentionReleased = Money.round2(c.retentionReleased.add(amt));
+        audit.log("contract", c.id, AuditService.ACTION_UPDATE, null, Map.of("retentionReleased", amt, "receipt", receipt.docNo));
         return toDto(c);
     }
 
@@ -469,6 +477,11 @@ public class ContractService {
         if (docs.longValue() > 0) {
             throw ApiException.conflict("in_use", "สัญญานี้มีเอกสารการเงินแล้ว");
         }
+        // ใบแจ้งหนี้ฉบับร่างที่ถูกลบ (soft delete) อาจยังอ้างอิงงวดงานอยู่ → ปลดการอ้างอิงก่อนลบงวด
+        em.createNativeQuery("""
+                        update sales_doc_items set milestone_id = null
+                        where milestone_id in (select id from contract_milestones where contract_id = ?1)""")
+                .setParameter(1, c.id).executeUpdate();
         em.createNativeQuery("delete from contract_milestones where contract_id = ?1").setParameter(1, c.id).executeUpdate();
         em.createNativeQuery("update change_orders set deleted_at = now() where contract_id = ?1").setParameter(1, c.id).executeUpdate();
         c.softDelete();
@@ -484,8 +497,8 @@ public class ContractService {
                           coalesce((select sum(case when doc_type = 'credit_note' then -(subtotal - discount_amount) else subtotal - discount_amount end)
                                     from sales_docs where contract_id = ?1 and kind <> 'advance' and status not in ('draft', 'void')
                                       and doc_type in ('invoice', 'invoice_tax', 'credit_note') and deleted_at is null), 0),
-                          coalesce((select sum(settled_amount) from sales_docs where contract_id = ?1 and status not in ('draft', 'void')
-                                      and doc_type in ('invoice', 'invoice_tax') and deleted_at is null), 0),
+                          coalesce((select sum(settled_amount) from sales_docs where contract_id = ?1 and status <> 'void'
+                                      and doc_type in ('receipt', 'tax_receipt') and kind <> 'retention' and deleted_at is null), 0),
                           coalesce((select sum(total_amount - settled_amount) from sales_docs where contract_id = ?1
                                       and status in ('issued', 'partial') and doc_type in ('invoice', 'invoice_tax') and deleted_at is null), 0),
                           coalesce((select sum(taxable_amount) from sales_docs where contract_id = ?1 and kind = 'advance'
@@ -493,7 +506,7 @@ public class ContractService {
                           coalesce((select sum(advance_deduct) from sales_docs where contract_id = ?1
                                       and status not in ('draft', 'void') and doc_type in ('invoice', 'invoice_tax') and deleted_at is null), 0),
                           coalesce((select sum(retention_amount) from sales_docs where contract_id = ?1
-                                      and status not in ('draft', 'void') and doc_type in ('invoice', 'invoice_tax') and deleted_at is null), 0),
+                                      and status <> 'void' and doc_type in ('receipt', 'tax_receipt') and kind <> 'retention' and deleted_at is null), 0),
                           coalesce((select sum(pct) from contract_milestones where contract_id = ?1 and change_order_id is null), 0)
                         """).setParameter(1, c.id).getSingleResult();
         BigDecimal vo = SqlValues.decimal0(r[0]);
@@ -504,6 +517,15 @@ public class ContractService {
                 Money.round2(SqlValues.decimal0(r[2])), Money.round2(SqlValues.decimal0(r[3])), Money.round2(SqlValues.decimal0(r[4])),
                 Money.round2(SqlValues.decimal0(r[5])), retention.subtract(c.retentionReleased), c.retentionReleased,
                 SqlValues.decimal0(r[7]));
+    }
+
+    /** เงินประกันผลงานที่ลูกค้ากันไว้จริง (จากใบเสร็จที่ยังไม่ยกเลิก) ก่อนหักที่รับคืน */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public BigDecimal retentionWithheld(UUID contractId) {
+        return Money.round2(SqlValues.decimal0(em.createNativeQuery("""
+                        select coalesce(sum(retention_amount), 0) from sales_docs where contract_id = ?1
+                        and status <> 'void' and doc_type in ('receipt', 'tax_receipt') and kind <> 'retention' and deleted_at is null""")
+                .setParameter(1, contractId).getSingleResult()));
     }
 
     // ================================================================= dto

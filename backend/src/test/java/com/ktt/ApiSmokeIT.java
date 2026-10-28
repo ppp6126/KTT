@@ -87,6 +87,7 @@ class ApiSmokeIT {
 
     @Test
     void wholeSystem() throws Exception {
+        io.restassured.RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
         token = login();
         LocalDate today = LocalDate.now(BKK);
         String period = today.toString().substring(0, 7);
@@ -148,7 +149,10 @@ class ApiSmokeIT {
         Response pv = post("/api/ap/vouchers", m("supplierId", supplierId, "payDate", today.toString(), "method", "transfer",
                 "lines", List.of(m("billId", billId, "amount", 1605))));
         pv.then().statusCode(201);
-        post("/api/ap/vouchers/" + pv.path("id") + "/approve", Map.of()).then().statusCode(403); // ผู้สร้างอนุมัติเองไม่ได้
+        // owner ได้รับยกเว้นกฎห้ามอนุมัติของตัวเอง (บริษัทเล็กเจ้าของทำเองได้)
+        post("/api/ap/vouchers/" + pv.path("id") + "/approve", Map.of()).then().statusCode(200).body("status", equalTo("approved"));
+        post("/api/ap/vouchers/" + pv.path("id") + "/pay", m("paidDate", today.toString())).then().statusCode(200).body("status", equalTo("paid"));
+        get("/api/ap/bills/" + billId).then().statusCode(200).body("status", equalTo("paid"));
 
         // ---------------------------------------------------------------- ใบอนุญาต
         Response permit = post("/api/permits", m("kind", "building_permit", "name", "ใบอนุญาตก่อสร้าง อ.1", "projectId", projectId,

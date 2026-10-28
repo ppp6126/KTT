@@ -58,21 +58,80 @@ public final class FinanceCalculator {
     }
 
     /**
-     * แบ่ง VAT ตามสัดส่วนเงินที่รับชำระ (งานบริการเกิดภาษีขายเมื่อได้รับชำระ)
-     * @param settled   ยอดที่ตัดชำระครั้งนี้ (เงินรับ + ภาษีหัก ณ ที่จ่าย + เงินประกันที่ลูกค้ากัน)
-     * @param total     ยอดรวมภาษีของใบแจ้งหนี้
-     * @param vat       VAT ของใบแจ้งหนี้
-     * @param priorVat  VAT ที่ออกใบกำกับไปแล้วในการรับชำระครั้งก่อน
-     * @param isFinal   ครั้งนี้ตัดยอดครบ → ใช้ VAT ที่เหลือทั้งหมด (กันเศษสตางค์สะสม)
+     * แบ่ง VAT ตามสัดส่วนเงินที่รับชำระ (งานบริการเกิดภาษีขายเมื่อได้รับชำระ) ไม่มีเงินประกันผลงาน
+     * @see #vatPortion(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal, boolean)
      */
     public static BigDecimal vatPortion(BigDecimal settled, BigDecimal total, BigDecimal vat, BigDecimal priorVat, boolean isFinal) {
+        return vatPortion(settled, BigDecimal.ZERO, total, vat, priorVat, BigDecimal.ZERO, isFinal);
+    }
+
+    /**
+     * VAT ของใบเสร็จรับเงิน/ใบกำกับภาษี: งานบริการเกิดภาษีขายเมื่อได้รับชำระ
+     * เงินประกันผลงานที่ลูกค้ากันไว้ยังไม่ได้รับ → VAT ส่วนนั้นเลื่อนไปออกตอนรับคืนเงินประกัน
+     * @param received          เงินที่ได้รับครั้งนี้ (เงินรับ + ภาษีหัก ณ ที่จ่าย) ไม่รวมเงินประกัน
+     * @param retention         เงินประกันที่ลูกค้ากันไว้ครั้งนี้
+     * @param total             ยอดรวมภาษีของใบแจ้งหนี้
+     * @param vat               VAT ของใบแจ้งหนี้
+     * @param priorVat          VAT ที่ออกใบกำกับ/ลดหนี้ไปแล้วของใบแจ้งหนี้นี้
+     * @param priorRetentionVat VAT ของเงินประกันที่เลื่อนไว้ในการรับชำระครั้งก่อน
+     * @param isFinal           ครั้งนี้ตัดยอดครบ → ใช้ VAT ที่เหลือทั้งหมด (กันเศษสตางค์สะสม)
+     */
+    public static BigDecimal vatPortion(BigDecimal received, BigDecimal retention, BigDecimal total, BigDecimal vat,
+                                        BigDecimal priorVat, BigDecimal priorRetentionVat, boolean isFinal) {
         if (Money.isZero(vat) || Money.isZero(total)) {
             return BigDecimal.ZERO.setScale(2);
         }
         if (isFinal) {
-            return Money.round2(vat.subtract(Money.z(priorVat)));
+            BigDecimal rest = vat.subtract(Money.z(priorVat)).subtract(Money.z(priorRetentionVat))
+                    .subtract(retentionVat(retention, total, vat));
+            return Money.round2(rest).max(BigDecimal.ZERO.setScale(2));
         }
-        return settled.multiply(vat).divide(total, 2, RoundingMode.HALF_UP);
+        return Money.z(received).multiply(vat).divide(total, 2, RoundingMode.HALF_UP);
+    }
+
+    /** VAT ในเงินประกันผลงานที่ลูกค้ากันไว้ (เลื่อนไปออกใบกำกับตอนรับคืน) */
+    public static BigDecimal retentionVat(BigDecimal retention, BigDecimal total, BigDecimal vat) {
+        if (Money.isZero(vat) || Money.isZero(total) || Money.isZero(retention)) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+        return retention.multiply(vat).divide(total, 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * VAT ของใบเสร็จรับคืนเงินประกันผลงาน
+     * @param amount      ยอดที่รับคืนครั้งนี้
+     * @param pendingBase เงินประกันที่ยังเลื่อน VAT ไว้และยังไม่รับคืน
+     * @param pendingVat  VAT ที่ยังเลื่อนไว้
+     */
+    public static BigDecimal retentionReleaseVat(BigDecimal amount, BigDecimal pendingBase, BigDecimal pendingVat) {
+        if (Money.z(pendingBase).signum() <= 0 || Money.z(pendingVat).signum() <= 0) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+        if (amount.compareTo(pendingBase) >= 0) {
+            return Money.round2(pendingVat);
+        }
+        return amount.multiply(pendingVat).divide(pendingBase, 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * เงินล่วงหน้าที่หักคืนในใบแจ้งหนี้งวดงาน
+     * @param base          มูลค่างวดตามสัญญาในใบนี้ (ไม่รวมงวด VO)
+     * @param advancePct    % เงินล่วงหน้า
+     * @param advanceBilled เงินล่วงหน้าที่เรียกเก็บแล้ว (0 = ยังไม่เรียกเก็บ → หักตามสัดส่วน)
+     * @param deducted      หักคืนไปแล้วในใบแจ้งหนี้อื่น
+     * @param isFinal       ใบนี้วางบิลงวดตามสัญญาที่เหลือทั้งหมด → หักส่วนที่เหลือทั้งหมด
+     */
+    public static BigDecimal advanceDeduction(BigDecimal base, BigDecimal advancePct, BigDecimal advanceBilled,
+                                              BigDecimal deducted, boolean isFinal) {
+        if (Money.z(advancePct).signum() <= 0) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+        BigDecimal portion = Money.pct(base, advancePct);
+        if (Money.z(advanceBilled).signum() <= 0) {
+            return portion;
+        }
+        BigDecimal remaining = Money.round2(advanceBilled.subtract(Money.z(deducted))).max(BigDecimal.ZERO.setScale(2));
+        return isFinal ? remaining : portion.min(remaining);
     }
 
     public record CreditResult(BigDecimal difference, BigDecimal vatAmount, BigDecimal total) {

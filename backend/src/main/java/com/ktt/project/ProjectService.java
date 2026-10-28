@@ -378,11 +378,17 @@ public class ProjectService {
             byKey.put(in.key(), t);
         }
         // ลบงานที่ไม่อยู่ในรายการก่อนผูก parent ใหม่ (ON DELETE CASCADE ของ parent ไม่กระทบงานที่ยังอยู่เพราะ parent ถูกล้างแล้ว)
+        // ลบด้วยคำสั่งเดียว: ถ้าลบทีละแถว งานลูกอาจถูก cascade ลบไปก่อนแล้ว Hibernate ลบซ้ำ → StaleStateException
         em.flush();
+        List<UUID> removed = new ArrayList<>();
         for (ProjectTask t : existing.values()) {
             if (!kept.contains(t.id)) {
-                t.delete();
+                removed.add(t.id);
+                em.detach(t);
             }
+        }
+        if (!removed.isEmpty()) {
+            em.createNativeQuery("delete from project_tasks where id in (:ids)").setParameter("ids", removed).executeUpdate();
         }
         em.flush();
         for (TaskInput in : inputs) {
@@ -415,6 +421,14 @@ public class ProjectService {
         if (t == null || !t.projectId.equals(p.id)) {
             throw ApiException.badRequest("invalid_task", "งานไม่ได้อยู่ในโครงการนี้");
         }
+        // รายงานย้อนหลังต้องไม่ทับความคืบหน้าจากรายงานที่ใหม่กว่าซึ่งส่งแล้ว
+        Number newer = (Number) em.createNativeQuery("""
+                        select count(*) from daily_report_tasks rt join daily_reports r on r.id = rt.report_id
+                        where rt.task_id = ?1 and r.report_date > ?2 and r.status in ('submitted', 'acknowledged') and r.deleted_at is null""")
+                .setParameter(1, taskId).setParameter(2, date).getSingleResult();
+        if (newer.longValue() > 0) {
+            return;
+        }
         t.progressPct = pct;
         if (pct.signum() > 0 && t.actualStart == null) {
             t.actualStart = date;
@@ -429,14 +443,59 @@ public class ProjectService {
     /** คำนวณ % รวมใหม่และบันทึกจุด S-Curve ของวันนี้ */
     @Transactional(Transactional.TxType.MANDATORY)
     public void recomputeProgress(Project p) {
+        recomputeProgress(p, null);
+    }
+
+    /**
+     * คำนวณ % รวมใหม่ บันทึกจุด S-Curve ของวันนี้ และ (ถ้าระบุ) ของวันที่รายงาน
+     * จุดของวันที่รายงานคิดจากความคืบหน้า ณ วันนั้น: ค่าจากรายงานที่ส่งแล้วฉบับล่าสุดที่ไม่เกินวันนั้นของแต่ละงาน
+     */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public void recomputeProgress(Project p, LocalDate reportDate) {
         em.flush();
-        BigDecimal actual = ScheduleCalculator.actual(calcTasks(ProjectTask.listFor(p.id)));
+        List<ProjectTask> tasks = ProjectTask.listFor(p.id);
+        BigDecimal actual = ScheduleCalculator.actual(calcTasks(tasks));
         p.progressPct = actual;
+        LocalDate today = DocNumberService.today();
+        snapshot(p, today, actual);
+        if (reportDate != null && reportDate.isBefore(today)) {
+            snapshot(p, reportDate, ScheduleCalculator.actual(calcTasksAsOf(p, tasks, reportDate)));
+        }
+    }
+
+    private void snapshot(Project p, LocalDate date, BigDecimal actual) {
         em.createNativeQuery("""
                         insert into project_progress_snapshots (project_id, snap_date, actual_pct) values (?1, ?2, ?3)
                         on conflict (project_id, snap_date) do update set actual_pct = excluded.actual_pct
                         """)
-                .setParameter(1, p.id).setParameter(2, DocNumberService.today()).setParameter(3, actual).executeUpdate();
+                .setParameter(1, p.id).setParameter(2, date).setParameter(3, actual).executeUpdate();
+    }
+
+    /** งานพร้อมความคืบหน้า ณ วันที่ระบุ (งานที่มีรายงานหลังวันนั้นแต่ไม่มีก่อน → 0, งานที่ไม่มีรายงานเลย → ค่าปัจจุบัน) */
+    private List<ScheduleCalculator.Task> calcTasksAsOf(Project p, List<ProjectTask> tasks, LocalDate date) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery("""
+                        select rt.task_id,
+                               (array_agg(rt.progress_pct order by r.report_date desc) filter (where r.report_date <= ?2))[1],
+                               bool_or(r.report_date > ?2)
+                        from daily_report_tasks rt join daily_reports r on r.id = rt.report_id
+                        where r.project_id = ?1 and r.status in ('submitted', 'acknowledged') and r.deleted_at is null
+                        group by rt.task_id""").setParameter(1, p.id).setParameter(2, date).getResultList();
+        Map<UUID, BigDecimal> asOf = new HashMap<>();
+        for (Object[] r : rows) {
+            BigDecimal v = r[1] == null ? null : SqlValues.decimal(r[1]);
+            if (v != null) {
+                asOf.put(SqlValues.uuid(r[0]), v);
+            } else if (Boolean.TRUE.equals(r[2])) {
+                asOf.put(SqlValues.uuid(r[0]), BigDecimal.ZERO);
+            }
+        }
+        List<ScheduleCalculator.Task> out = new ArrayList<>();
+        for (ScheduleCalculator.Task t : calcTasks(tasks)) {
+            BigDecimal v = asOf.get(t.id());
+            out.add(v == null ? t : new ScheduleCalculator.Task(t.id(), t.parentId(), t.weight(), v, t.plannedStart(), t.plannedEnd()));
+        }
+        return out;
     }
 
     ScheduleDto scheduleOf(Project p) {
@@ -593,7 +652,8 @@ public class ProjectService {
                                          from sales_docs d where d.contract_id = c.id and d.deleted_at is null and d.status <> 'void'
                                            and d.status <> 'draft' and d.doc_type in ('invoice', 'invoice_tax', 'credit_note')), 0),
                                coalesce((select sum(d.settled_amount) from sales_docs d where d.contract_id = c.id
-                                           and d.deleted_at is null and d.status <> 'void' and d.doc_type in ('invoice', 'invoice_tax')), 0)
+                                           and d.deleted_at is null and d.status <> 'void' and d.doc_type in ('receipt', 'tax_receipt')
+                                           and d.kind <> 'retention'), 0)
                         from contracts c where c.project_id = ?1 and c.deleted_at is null
                         """).setParameter(1, projectId).getResultList();
         if (rows.isEmpty()) {

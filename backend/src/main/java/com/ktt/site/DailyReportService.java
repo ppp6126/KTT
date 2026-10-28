@@ -127,6 +127,8 @@ public class DailyReportService {
             throw ApiException.conflict("invalid_status", "ส่งรายงานนี้แล้ว");
         }
         Project p = Project.findById(r.projectId);
+        // ตั้งสถานะก่อนคำนวณ เพื่อให้จุด S-Curve ณ วันที่รายงานนับค่าจากรายงานฉบับนี้ด้วย
+        r.status = "submitted";
         @SuppressWarnings("unchecked")
         List<Object[]> rows = em.createNativeQuery("select task_id, progress_pct from daily_report_tasks where report_id = ?1")
                 .setParameter(1, r.id).getResultList();
@@ -134,7 +136,8 @@ public class DailyReportService {
             projects.applyTaskProgress(p, SqlValues.uuid(row[0]), SqlValues.decimal(row[1]), r.reportDate);
         }
         if (!rows.isEmpty()) {
-            projects.recomputeProgress(p);
+            // จุด S-Curve บันทึกตามวันที่รายงาน (รายงานย้อนหลังไม่ทับความคืบหน้าจากรายงานที่ใหม่กว่า)
+            projects.recomputeProgress(p, r.reportDate);
         }
         if ("planning".equals(p.status)) {
             p.status = "active";
@@ -142,7 +145,6 @@ public class DailyReportService {
                 p.actualStart = r.reportDate;
             }
         }
-        r.status = "submitted";
         r.submittedAt = Instant.now();
         r.submittedBy = currentUser.id();
         if (p.managerId != null && !p.managerId.equals(currentUser.id())) {
@@ -262,7 +264,7 @@ public class DailyReportService {
             for (TaskProgressInput t : tasks) {
                 projects.applyTaskProgress(p, t.taskId(), t.progressPct(), r.reportDate);
             }
-            projects.recomputeProgress(p);
+            projects.recomputeProgress(p, r.reportDate);
         }
     }
 

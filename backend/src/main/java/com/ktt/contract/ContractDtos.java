@@ -87,7 +87,9 @@ public final class ContractDtos {
             @NotNull @DecimalMin(value = "0", message = "จำนวนต้องไม่ติดลบ") BigDecimal quantity,
             @Size(max = 30) String unit,
             @NotNull BigDecimal unitPrice,
-            BigDecimal unitCost) {
+            BigDecimal unitCost,
+            /** id รายการเดิม (ถ้ามี) ใช้คงต้นทุนเดิมเมื่อผู้แก้ไม่มีสิทธิ์ดูต้นทุน */
+            UUID id) {
     }
 
     public record VoRequest(

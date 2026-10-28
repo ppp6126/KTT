@@ -49,3 +49,44 @@ export function computeFinance(i: FinanceInput): FinanceResult {
     net: round2(total - retentionAmount - whtAmount),
   };
 }
+
+/**
+ * VAT ของใบเสร็จรับเงิน/ใบกำกับภาษี (ตรงกับ FinanceCalculator.vatPortion):
+ * คิดจากเงินที่ได้รับจริง (เงินรับ + หัก ณ ที่จ่าย) ไม่รวมเงินประกันผลงานที่ลูกค้ากันไว้
+ * ครั้งสุดท้ายใช้ VAT ที่เหลือหลังหัก VAT ที่ออกแล้วและ VAT ของเงินประกันที่เลื่อนไว้
+ */
+export function vatPortion(
+  received: number,
+  retention: number,
+  total: number,
+  vat: number,
+  priorVat: number,
+  priorRetentionVat: number,
+  isFinal: boolean,
+): number {
+  if (!vat || !total) return 0;
+  if (isFinal) return Math.max(0, round2(vat - (priorVat || 0) - (priorRetentionVat || 0) - retentionVat(retention, total, vat)));
+  return round2(((received || 0) * vat) / total);
+}
+
+/** VAT ในเงินประกันผลงานที่ลูกค้ากันไว้ (ออกใบกำกับตอนรับคืน) */
+export function retentionVat(retention: number, total: number, vat: number): number {
+  if (!vat || !total || !retention) return 0;
+  return round2((retention * vat) / total);
+}
+
+/** VAT ของใบเสร็จรับคืนเงินประกันผลงาน */
+export function retentionReleaseVat(amount: number, pendingBase: number, pendingVat: number): number {
+  if (!(pendingBase > 0) || !(pendingVat > 0)) return 0;
+  if (amount >= pendingBase) return round2(pendingVat);
+  return round2((amount * pendingVat) / pendingBase);
+}
+
+/** เงินล่วงหน้าที่หักคืนในใบแจ้งหนี้งวดงาน (งวดสุดท้ายหักส่วนที่เหลือทั้งหมด) */
+export function advanceDeduction(base: number, advancePct: number, advanceBilled: number, deducted: number, isFinal: boolean): number {
+  if (!(advancePct > 0)) return 0;
+  const portion = pct(base, advancePct);
+  if (!(advanceBilled > 0)) return portion;
+  const remaining = Math.max(0, round2(advanceBilled - (deducted || 0)));
+  return isFinal ? remaining : Math.min(portion, remaining);
+}

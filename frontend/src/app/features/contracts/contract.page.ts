@@ -426,7 +426,7 @@ export class ContractPage implements OnInit {
     const held = this.c()!.financials.retentionHeld;
     prompt(this.dialog, {
       title: 'รับคืนเงินประกันผลงาน',
-      message: `ลูกค้ากันไว้ ${held.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท`,
+      message: `ลูกค้ากันไว้ ${held.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท ระบบจะออกใบเสร็จรับเงิน (/ใบกำกับภาษีสำหรับ VAT ของเงินประกัน) ลงวันที่วันนี้ให้อัตโนมัติ`,
       label: 'จำนวนเงินที่ได้รับคืน (บาท)',
       value: String(held),
       confirmText: 'บันทึก',
@@ -434,7 +434,10 @@ export class ContractPage implements OnInit {
     }).subscribe((v) => {
       if (!v) return;
       this.api.releaseRetention(this.c()!.id, Number(v.replace(/,/g, ''))).subscribe({
-        next: (c) => this.c.set(c),
+        next: (c) => {
+          this.c.set(c);
+          this.notify.ok('บันทึกรับคืนและออกใบเสร็จแล้ว');
+        },
         error: (e) => this.notify.error(e),
       });
     });

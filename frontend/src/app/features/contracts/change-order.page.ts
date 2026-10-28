@@ -278,6 +278,7 @@ export class ChangeOrderPage implements OnInit {
       daysExtension: Number(this.m.daysExtension) || 0,
       customerApprovedAt: this.m.customerApprovedAt || null,
       items: items.map((i) => ({
+        id: i.id,
         description: i.description.trim(),
         quantity: Number(i.quantity) || 0,
         unit: i.unit || null,

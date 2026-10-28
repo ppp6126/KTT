@@ -23,6 +23,7 @@ import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -77,7 +78,7 @@ public class ChangeOrderService {
         v.createdBy = currentUser.id();
         apply(v, req);
         v.persist();
-        List<ChangeOrderItem> items = writeItems(v, req.items());
+        List<ChangeOrderItem> items = writeItems(v, req.items(), Map.of());
         audit.log("change_order", v.id, AuditService.ACTION_CREATE, null,
                 Map.of("docNo", v.docNo, "contract", c.docNo, "amount", v.amount));
         return toDto(v, items);
@@ -91,8 +92,15 @@ public class ChangeOrderService {
         }
         BigDecimal before = v.amount;
         apply(v, req);
+        // ต้นทุนเดิมรายรายการ: ผู้ไม่มีสิทธิ์ดูต้นทุนส่ง unitCost มาไม่ได้ → คงค่าเดิมตาม id รายการ
+        Map<UUID, BigDecimal> oldCosts = new HashMap<>();
+        for (ChangeOrderItem old : ChangeOrderItem.listFor(v.id)) {
+            if (old.unitCost != null) {
+                oldCosts.put(old.id, old.unitCost);
+            }
+        }
         ChangeOrderItem.delete("changeOrderId", v.id);
-        List<ChangeOrderItem> items = writeItems(v, req.items());
+        List<ChangeOrderItem> items = writeItems(v, req.items(), oldCosts);
         audit.log("change_order", v.id, AuditService.ACTION_UPDATE, Map.of("amount", before), Map.of("amount", v.amount));
         return toDto(v, items);
     }
@@ -235,7 +243,7 @@ public class ChangeOrderService {
         v.customerApprovedAt = req.customerApprovedAt();
     }
 
-    private List<ChangeOrderItem> writeItems(ChangeOrder v, List<VoItemInput> inputs) {
+    private List<ChangeOrderItem> writeItems(ChangeOrder v, List<VoItemInput> inputs, Map<UUID, BigDecimal> oldCosts) {
         boolean cost = currentUser.canViewCost();
         List<ChangeOrderItem> out = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
@@ -251,8 +259,12 @@ public class ChangeOrderService {
             it.unit = UserNames.blankToNull(in.unit());
             it.unitPrice = Money.round2(in.unitPrice());
             it.amount = Money.round2(it.quantity.multiply(it.unitPrice));
-            if (cost && in.unitCost() != null) {
-                it.unitCost = Money.round2(in.unitCost());
+            if (cost) {
+                it.unitCost = in.unitCost() == null ? null : Money.round2(in.unitCost());
+            } else {
+                it.unitCost = in.id() == null ? null : oldCosts.get(in.id());
+            }
+            if (it.unitCost != null) {
                 costTotal = costTotal.add(Money.round2(it.quantity.multiply(it.unitCost)));
                 hasCost = true;
             }
@@ -261,9 +273,7 @@ public class ChangeOrderService {
             out.add(it);
         }
         v.amount = Money.round2(total);
-        if (cost) {
-            v.costAmount = hasCost ? Money.round2(costTotal) : null;
-        }
+        v.costAmount = hasCost ? Money.round2(costTotal) : null;
         return out;
     }
 

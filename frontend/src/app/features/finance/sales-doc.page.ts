@@ -276,13 +276,16 @@ import { DOC_STATUS, DOC_TYPE, DocItem, FinanceApi, InvoiceSave, KIND, PAY_METHO
                     <div><dt>VAT {{ d.vatPct }}%</dt><dd>{{ d.vatAmount | money }}</dd></div>
                   }
                   <div class="grand"><dt>รวมทั้งสิ้น</dt><dd>{{ d.totalAmount | money }}</dd></div>
-                  @if (d.retentionAmount) {
+                  @if (d.retentionAmount && d.docType !== 'receipt' && d.docType !== 'tax_receipt') {
                     <div><dt>เงินประกันผลงาน</dt><dd>-{{ d.retentionAmount | money }}</dd></div>
                   }
                   @if (d.whtAmount) {
                     <div><dt>ภาษีหัก ณ ที่จ่าย</dt><dd>-{{ d.whtAmount | money }}</dd></div>
                   }
                   <div class="grand net"><dt>{{ d.docType === 'receipt' || d.docType === 'tax_receipt' ? 'รับเงินสุทธิ' : 'ยอดชำระสุทธิ' }}</dt><dd>{{ d.netAmount | money }}</dd></div>
+                  @if (d.retentionAmount && (d.docType === 'receipt' || d.docType === 'tax_receipt') && d.kind !== 'retention') {
+                    <div><dt>เงินประกันผลงานที่ลูกค้ากันไว้ (ตัดยอดใบแจ้งหนี้ ยังไม่รับเงิน)</dt><dd>{{ d.retentionAmount | money }}</dd></div>
+                  }
                   @if (d.outstanding !== null) {
                     <div><dt>ชำระแล้ว</dt><dd>{{ d.settledAmount | money }}</dd></div>
                     <div class="grand"><dt>ค้างชำระ</dt><dd [class.bad]="d.outstanding > 0">{{ d.outstanding | money }}</dd></div>

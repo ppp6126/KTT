@@ -54,7 +54,7 @@ jobs:
         run: |
           for f in it-auth.log it-smoke.log; do
             [ -f "$f" ] || continue
-            grep -nE "ERROR|Caused by|Exception|expected|FAIL|Tests run" "$f" | grep -v "^.*DEBUG" | head -c 30000 > "$f.err" || true
+            grep -nE 'ERROR|Caused by|Exception|expected|FAIL|Tests run|"code"|"message"|Request URI|Status code|HTTP/1.1' "$f" | grep -v "^.*DEBUG" | head -c 30000 > "$f.err" || true
             split -b 3500 "$f.err" "$f.part." || true
             for p in "$f".part.*; do
               [ -f "$p" ] || continue

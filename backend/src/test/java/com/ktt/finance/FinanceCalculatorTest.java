@@ -56,4 +56,41 @@ class FinanceCalculatorTest {
         assertEquals(d("700.00"), r.vatAmount());
         assertEquals(d("10700.00"), r.total());
     }
+
+    @Test
+    void vatOnRetentionIsDeferredUntilReleased() {
+        // ใบแจ้งหนี้ 288,900 (VAT 18,900) ลูกค้ากันเงินประกัน 13,500 หัก ณ ที่จ่าย 8,100 จ่ายเงิน 267,300
+        BigDecimal retVat = FinanceCalculator.retentionVat(d("13500"), d("288900.00"), d("18900.00"));
+        BigDecimal vat = FinanceCalculator.vatPortion(d("275400.00"), d("13500"), d("288900.00"), d("18900.00"), d("0"), d("0"), true);
+        assertEquals(d("883.18"), retVat);
+        assertEquals(d("18016.82"), vat);
+        assertEquals(d("6542.06"), FinanceCalculator.vatPortion(d("100000"), d("0"), d("107000.00"), d("7000.00"), d("0"), d("0"), false));
+        // รับคืนครบ → VAT ที่เลื่อนไว้ทั้งหมด, รับคืนครึ่งหนึ่ง → ตามสัดส่วน
+        assertEquals(d("883.18"), FinanceCalculator.retentionReleaseVat(d("13500.00"), d("13500.00"), retVat));
+        assertEquals(d("441.59"), FinanceCalculator.retentionReleaseVat(d("6750.00"), d("13500.00"), retVat));
+        assertEquals(d("0.00"), FinanceCalculator.retentionReleaseVat(d("6750.00"), d("0"), d("0")));
+    }
+
+    @Test
+    void partialPaymentsWithRetentionSumToInvoiceVat() {
+        // 2 งวดรับชำระ ครั้งละครึ่ง แต่ละครั้งลูกค้ากันเงินประกัน 6,750
+        BigDecimal total = d("288900.00");
+        BigDecimal vat = d("18900.00");
+        BigDecimal p1 = FinanceCalculator.vatPortion(d("137700.00"), d("6750.00"), total, vat, d("0"), d("0"), false);
+        BigDecimal r1 = FinanceCalculator.retentionVat(d("6750.00"), total, vat);
+        BigDecimal p2 = FinanceCalculator.vatPortion(d("137700.00"), d("6750.00"), total, vat, p1, r1, true);
+        BigDecimal r2 = FinanceCalculator.retentionVat(d("6750.00"), total, vat);
+        assertEquals(vat, p1.add(p2).add(r1).add(r2));
+    }
+
+    @Test
+    void finalMilestoneDeductsRemainingAdvance() {
+        assertEquals(d("30000.00"), FinanceCalculator.advanceDeduction(d("300000"), d("10"), d("100000.00"), d("0"), false));
+        // 3 งวด 333,333.33 → 2 งวดแรกหัก 33,333.33 รวม 66,666.66 งวดสุดท้ายหักที่เหลือ 33,333.34
+        assertEquals(d("33333.34"), FinanceCalculator.advanceDeduction(d("333333.34"), d("10"), d("100000.00"), d("66666.66"), true));
+        // ไม่หักเกินยอดที่เหลือ
+        assertEquals(d("30000.00"), FinanceCalculator.advanceDeduction(d("500000"), d("10"), d("100000.00"), d("70000.00"), false));
+        // ยังไม่เรียกเก็บเงินล่วงหน้า → หักตามสัดส่วนเดิม
+        assertEquals(d("30000.00"), FinanceCalculator.advanceDeduction(d("300000"), d("10"), d("0"), d("0"), true));
+    }
 }
